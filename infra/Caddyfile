@@ -1,0 +1,6 @@
+agmx.io {
+  reverse_proxy web:3000 {
+    header_up X-Real-IP {remote_host}
+  }
+  header Strict-Transport-Security "max-age=31536000"
+}

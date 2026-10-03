@@ -1,0 +1,99 @@
+x-app: &app
+  build: .
+  restart: unless-stopped
+  environment: &app-env
+    NODE_ENV: production
+    ORIGIN: https://agmx.io
+    MAIL_DOMAIN: mail.agmx.io
+    SMTP_HOSTNAME: mx.agmx.io
+    DATABASE_URL: postgresql://agmx:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/agmx
+    REGISTRATION_TOKEN: ${REGISTRATION_TOKEN:?Set REGISTRATION_TOKEN}
+    DATA_DIR: /data
+    RSPAMD_URL: http://rspamd:11333
+    S3_BUCKET: ${S3_BUCKET:-}
+    S3_ENDPOINT: ${S3_ENDPOINT:-}
+    S3_REGION: ${S3_REGION:-us-east-1}
+    S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+    S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+  volumes:
+    - mail-data:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rspamd:
+      condition: service_started
+
+services:
+  web:
+    <<: *app
+    environment:
+      <<: *app-env
+      HOST: 0.0.0.0
+      PORT: 3000
+      ADDRESS_HEADER: X-Real-IP
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  smtp:
+    <<: *app
+    command: [npm, run, smtp]
+    environment:
+      <<: *app-env
+      SMTP_PORT: 1025
+      SMTP_TLS_CERT: /certs/fullchain.pem
+      SMTP_TLS_KEY: /certs/privkey.pem
+    ports:
+      - "25:1025"
+    volumes:
+      - mail-data:/data
+      - ${SMTP_CERTS_DIR:?Set SMTP_CERTS_DIR}:/certs:ro
+
+  worker:
+    <<: *app
+    command: [npm, run, worker]
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agmx
+      POSTGRES_USER: agmx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U agmx -d agmx"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  rspamd:
+    image: rspamd/rspamd:4.2
+    restart: unless-stopped
+    volumes:
+      - ./infra/rspamd/worker-normal.inc:/etc/rspamd/local.d/worker-normal.inc:ro
+      - rspamd-data:/var/lib/rspamd
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  mail-data:
+  postgres-data:
+  rspamd-data:
+  caddy-data:
+  caddy-config:
