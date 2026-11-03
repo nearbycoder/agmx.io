@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agmx"
+version = "0.1.0"
+description = "Official Python SDK for AGMX — email inboxes for AI agents."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "AGMX" }]
+keywords = ["email", "inbox", "ai", "agents", "mcp", "otp", "agmx"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Communications :: Email",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://agmx.io"
+Documentation = "https://agmx.io/docs"
+Source = "https://github.com/nearbycoder/agmx.io"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agmx"]

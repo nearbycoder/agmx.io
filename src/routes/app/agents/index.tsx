@@ -3,6 +3,7 @@ import { Bot, Plus, Search, Webhook } from "lucide-react"
 import { useMemo, useState } from "react"
 import { Page, PageHeader } from "~/components/app/page"
 import { AgentAvatar } from "~/components/brand"
+import { InboxStatusBadge } from "~/components/dashboard/inbox-badges"
 import { CreateAgentDialog } from "~/components/dashboard/create-agent-dialog"
 import { Panel } from "~/components/dashboard/section"
 import { SignupCallout } from "~/components/dashboard/signup-callout"
@@ -160,7 +161,8 @@ function AgentCard({ agent }: { agent: AgentT }) {
       <div className="mt-3 flex flex-col gap-1">
         {agent.inboxes.slice(0, 3).map((inbox) => (
           <div key={inbox.id} className="flex min-w-0 items-center gap-1" onClick={(e) => e.preventDefault()}>
-            <code className={cn("min-w-0 truncate font-mono text-[12.5px]", inbox.status === "active" ? "text-ink-2" : "text-faint line-through")}>{inbox.address}</code>
+            <code className={cn("min-w-0 truncate font-mono text-[12.5px]", inbox.status === "active" ? "text-ink-2" : "text-faint")}>{inbox.address}</code>
+            <InboxStatusBadge inbox={inbox} className="shrink-0" />
             <CopyButton value={inbox.address} size="xs" label="Address copied" className="opacity-0 transition-opacity group-hover:opacity-100" />
           </div>
         ))}

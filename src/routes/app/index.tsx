@@ -7,6 +7,7 @@ import { AgentAvatar, SenderAvatar } from "~/components/brand"
 import { CopyField, origin, SectionLink } from "~/components/dashboard/common"
 import { CreateAgentDialog } from "~/components/dashboard/create-agent-dialog"
 import { Panel, PanelEmpty, Section } from "~/components/dashboard/section"
+import { ApprovalsCallout } from "~/components/dashboard/approvals-callout"
 import { SignupCallout } from "~/components/dashboard/signup-callout"
 import { StatStrip } from "~/components/dashboard/stat-card"
 import { UsageChart } from "~/components/dashboard/usage-chart"
@@ -16,6 +17,8 @@ import { CopyButton, Skeleton } from "~/components/ui/misc"
 import { api } from "~/lib/api"
 import { useAgents, useMe, useUsage } from "~/lib/queries"
 import { cn, mailTime } from "~/lib/utils"
+
+const UNSENT = ["draft", "scheduled", "pending_approval", "rejected"]
 
 export const Route = createFileRoute("/app/")({
   head: () => ({ meta: [{ title: "Overview — AGMX" }] }),
@@ -37,7 +40,9 @@ function OverviewPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const recent = useQuery({
     queryKey: ["messages", { overview: true }],
-    queryFn: () => api((c) => c.messages.list({ query: { limit: 6 } }))
+    // Held, scheduled and rejected mail hasn't been sent yet, so it isn't "recent mail".
+    queryFn: () => api((c) => c.messages.list({ query: { limit: 14 } })),
+    select: (page) => ({ ...page, messages: page.messages.filter((m) => !UNSENT.includes(m.status)).slice(0, 6) })
   })
   const firstName = (user.name || user.email).split(/[\s@]/)[0]
   const noAgents = agents !== undefined && agents.length === 0
@@ -106,6 +111,7 @@ function OverviewPage() {
       />
 
       <div className="flex flex-col gap-8">
+        <ApprovalsCallout />
         <SignupCallout />
         {noAgents ? <GettingStarted onCreate={() => setCreateOpen(true)} /> : null}
         <StatStrip stats={stats} loading={meLoading} />

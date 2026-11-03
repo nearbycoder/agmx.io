@@ -338,12 +338,15 @@ const FeatureRow = ({ title, body, points, visual, reverse }: { title: string; b
 )
 
 const CAPABILITIES = [
+  { title: "Prompt-injection protection", body: "Hidden text, invisible characters and instruction-like phrasing are flagged and stripped. Agents read safeText, not raw HTML." },
+  { title: "Human approval for sends", body: "Hold an agent's mail to new recipients — or all of it — until you approve it in the dashboard. Agents can't change their own policy." },
+  { title: "Temporary inboxes", body: "A throwaway address for one sign-up that only accepts mail from that service and deletes itself when it's done." },
+  { title: "Sender rules", body: "Allow-lists, blocks and labels per inbox, applied before mail is stored. Forward and webhook rules stay human-only." },
+  { title: "Drafts, scheduling, safe retries", body: "Save drafts, send later with sendAt, and pass an Idempotency-Key so a retried request never sends twice." },
+  { title: "Receipts, invites and tracking", body: "Calendar invites, receipt totals, order and tracking numbers, and text from PDF attachments — extracted for you." },
   { title: "Threaded replies", body: "Replies set In-Reply-To and References, so conversations stay threaded in Gmail, Outlook and AGMX." },
-  { title: "Signed webhooks", body: "message.received, sent, delivered, bounced and complained — HMAC-signed and retried with backoff for about six hours." },
-  { title: "Plus-addressing labels", body: "Mail to scout+github@bot.agmx.io lands in scout's inbox, labelled github. One inbox, sorted per service." },
-  { title: "Your own domain", body: "Publish the DKIM and MX records AGMX generates, then create inboxes at your brand. Included on Pro and Scale." },
-  { title: "Scoped keys", body: "Agent keys see only their own inboxes. Account keys manage everything. Revoke either instantly." },
-  { title: "Deliverability built in", body: "SPF, DKIM and DMARC verdicts on every inbound message. Hard bounces and complaints are suppressed automatically." }
+  { title: "Signed webhooks", body: "Received, sent, delivered, bounced, held, approved and rejected events — HMAC-signed and retried with backoff." },
+  { title: "Your own domain", body: "Publish the DKIM and MX records AGMX generates, then create inboxes at your brand. Included on Pro and Scale." }
 ]
 
 export function Features() {
@@ -357,7 +360,11 @@ export function Features() {
         <FeatureRow
           title="Codes and links, already extracted"
           body="Every inbound email is scanned for one-time codes and action links, so your agent reads a field instead of parsing HTML."
-          points={["extracted.codes for OTPs and PINs", "extracted.links classified as verify, login, reset or unsubscribe", "Full text, HTML, headers and attachments when you need them"]}
+          points={[
+            "extracted.codes for OTPs and PINs",
+            "extracted.links classified as verify, login, reset, tracking or unsubscribe",
+            "safeText with hidden content stripped, plus events, receipts and attachment text"
+          ]}
           visual={<CodeBlock lang="json" title="GET /api/v1/messages/msg_01j9…" code={EXTRACTED_JSON} />}
         />
         <FeatureRow
@@ -501,6 +508,10 @@ export const FAQS = [
   {
     q: "Can my agent get verification codes reliably?",
     a: "That's the core use case. Call GET /api/v1/messages/wait right after triggering the email. It returns the moment the email lands, with codes in extracted.codes and links in extracted.links."
+  },
+  {
+    q: "How are agents protected from malicious emails?",
+    a: "Every inbound message gets a security report and a cleaned safeText with hidden text and invisible characters removed, so agents read what a human would see. You can lock inboxes to expected senders with allow rules, and require your approval before an agent emails someone new."
   },
   {
     q: "Do I need MCP, or can I use plain HTTP?",

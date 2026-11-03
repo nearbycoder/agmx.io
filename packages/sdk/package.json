@@ -1,0 +1,48 @@
+{
+  "name": "agmx",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for AGMX \u2014 email inboxes for AI agents.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://agmx.io/docs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nearbycoder/agmx.io.git",
+    "directory": "packages/sdk"
+  },
+  "keywords": [
+    "email",
+    "inbox",
+    "ai",
+    "agents",
+    "mcp",
+    "otp",
+    "agmx"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "gen": "openapi-typescript openapi.json -o src/schema.ts && node scripts/normalize-schema.mjs",
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

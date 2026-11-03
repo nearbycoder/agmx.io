@@ -1,13 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useRouterState } from "@tanstack/react-router"
-import { AlertCircle, ChevronDown, ChevronUp, Forward, Maximize2, Minimize2, Paperclip, Reply, ReplyAll, Send, Trash2, X } from "lucide-react"
+import * as AlertPrimitive from "@radix-ui/react-alert-dialog"
+import { AlertCircle, CalendarClock, ChevronDown, ChevronUp, Clock, FileText, Forward, Maximize2, Minimize2, Paperclip, Reply, ReplyAll, Save, Send, Trash2, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { toast } from "sonner"
 import { parseAddress } from "~/shared/address"
 import { AgentAvatar } from "~/components/brand"
 import { Button } from "~/components/ui/button"
 import { ConfirmDialog } from "~/components/ui/dialog"
-import { Tooltip } from "~/components/ui/menu"
+import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { api, ApiFailure } from "~/lib/api"
 import { qk, useAgents } from "~/lib/queries"
 import { cn, formatBytes } from "~/lib/utils"
@@ -31,6 +32,34 @@ const readBase64 = (file: File) =>
     reader.readAsDataURL(file)
   })
 
+/** Next occurrence of `hour`:00 local time, `days` from today (0 = today if still ahead). */
+const atHour = (days: number, hour: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  d.setHours(hour, 0, 0, 0)
+  return d
+}
+
+const nextMonday9 = () => {
+  const now = new Date()
+  const days = ((8 - now.getDay()) % 7) || 7
+  return atHour(days, 9)
+}
+
+const schedulePresets = () => [
+  { label: "In 1 hour", at: new Date(Date.now() + 60 * 60_000) },
+  { label: "Tomorrow morning", at: atHour(1, 9) },
+  { label: "Monday morning", at: nextMonday9() }
+]
+
+const whenLabel = (d: Date) => d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+
+/** `datetime-local` value for a Date, in local time. */
+const toLocalInput = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 const splitRecipients = (value: string | undefined) =>
   (value ?? "")
     .split(/[,;\n]/)
@@ -50,15 +79,19 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   const currentInbox = useRouterState({ select: (s) => (s.location.search as { inbox?: string }).inbox })
   const { data: agents } = useAgents()
   const inboxes = useMemo(() => (agents ?? []).flatMap((a) => a.inboxes.map((i) => ({ ...i, agent: a }))), [agents])
-  const mode = draft.replyTo?.mode ?? "new"
+  // Saved drafts always edit as a full message; their thread and headers are kept server-side.
+  const mode = draft.draftId ? "new" : (draft.replyTo?.mode ?? "new")
   const isReply = mode === "reply" || mode === "replyAll"
+  const canSaveDraft = mode !== "forward"
+  // One key per compose session: a double-click or retry can never send twice.
+  const idempotencyKey = useMemo(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), [])
 
   const [from, setFrom] = useState(draft.from ?? "")
   const [to, setTo] = useState<Array<string>>(isReply ? [] : splitRecipients(draft.to))
   const [cc, setCc] = useState<Array<string>>(splitRecipients(draft.cc))
-  const [bcc, setBcc] = useState<Array<string>>([])
+  const [bcc, setBcc] = useState<Array<string>>(splitRecipients(draft.bcc))
   const [showCc, setShowCc] = useState(Boolean(draft.cc))
-  const [showBcc, setShowBcc] = useState(false)
+  const [showBcc, setShowBcc] = useState(Boolean(draft.bcc))
   const [subject, setSubject] = useState(
     draft.replyTo
       ? isReply
@@ -76,7 +109,10 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   const [expanded, setExpanded] = useState(false)
   const [showQuoted, setShowQuoted] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const [customAt, setCustomAt] = useState(() => toLocalInput(atHour(1, 9)))
   const [error, setError] = useState<string | null>(null)
+  const existingAttachments = draft.attachmentNames ?? []
   const fileInput = useRef<HTMLInputElement>(null)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const toRef = useRef<HTMLInputElement>(null)
@@ -95,23 +131,50 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const dirty = body.trim() !== (draft.text ?? "").trim() || files.length > 0 || (!draft.replyTo && (subject !== (draft.subject ?? "") || to.length > splitRecipients(draft.to).length))
+  const dirty =
+    body.trim() !== (draft.text ?? "").trim() ||
+    files.length > 0 ||
+    (!draft.replyTo &&
+      (subject !== (draft.subject ?? "") ||
+        to.join() !== splitRecipients(draft.to).join() ||
+        cc.join() !== splitRecipients(draft.cc).join() ||
+        bcc.join() !== splitRecipients(draft.bcc).join()))
   const totalBytes = files.reduce((s, f) => s + f.size, 0)
   const fromInbox = inboxes.find((i) => i.address === from)
 
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["messages"] })
+    void queryClient.invalidateQueries({ queryKey: ["thread"] })
+    void queryClient.invalidateQueries({ queryKey: qk.inboxes })
+    void queryClient.invalidateQueries({ queryKey: qk.agents })
+    void queryClient.invalidateQueries({ queryKey: qk.me })
+  }
+
+  const attachmentPayload = () => {
+    const list = files.map((f) => ({ filename: f.filename, contentType: f.contentType, content: f.content }))
+    return list.length ? list : undefined
+  }
+
+  /** The editable fields of a saved draft, as the drafts API expects them. */
+  const draftFields = () => ({ from, to, cc, bcc, subject, text: body, attachments: attachmentPayload() })
+
   const send = useMutation({
-    mutationFn: async () => {
-      const attachments = files.map((f) => ({ filename: f.filename, contentType: f.contentType, content: f.content }))
+    mutationFn: async (sendAt: string | undefined) => {
+      if (draft.draftId) {
+        const id = draft.draftId
+        await api((c) => c.drafts.update({ params: { messageId: id }, payload: draftFields() }))
+        return api((c) => c.drafts.send({ params: { messageId: id }, payload: { sendAt } }))
+      }
       if (draft.replyTo && isReply) {
         return api((c) =>
           c.messages.reply({
             params: { messageId: draft.replyTo!.messageId },
-            payload: { text: body, replyAll: mode === "replyAll", attachments: attachments.length ? attachments : undefined }
+            payload: { text: body, replyAll: mode === "replyAll", attachments: attachmentPayload(), sendAt, idempotencyKey }
           })
         )
       }
       if (draft.replyTo && mode === "forward") {
-        return api((c) => c.messages.forward({ params: { messageId: draft.replyTo!.messageId }, payload: { to, text: body || undefined } }))
+        return api((c) => c.messages.forward({ params: { messageId: draft.replyTo!.messageId }, payload: { to, text: body || undefined, sendAt, idempotencyKey } }))
       }
       return api((c) =>
         c.messages.send({
@@ -122,24 +185,21 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
             bcc: bcc.length ? bcc : undefined,
             subject,
             text: body,
-            attachments: attachments.length ? attachments : undefined
+            attachments: attachmentPayload(),
+            sendAt,
+            idempotencyKey
           }
         })
       )
     },
     onSuccess: (message) => {
-      void queryClient.invalidateQueries({ queryKey: ["messages"] })
-      void queryClient.invalidateQueries({ queryKey: ["thread"] })
-      void queryClient.invalidateQueries({ queryKey: qk.inboxes })
-      void queryClient.invalidateQueries({ queryKey: qk.agents })
-      void queryClient.invalidateQueries({ queryKey: qk.me })
-      toast.success(message.status === "failed" ? "Message failed to send" : "Sent", {
-        description: message.subject || undefined,
-        action: {
-          label: "View",
-          onClick: () => void navigate({ to: "/app/mail", search: { folder: "sent", t: message.threadId } })
-        }
-      })
+      refresh()
+      const folder = message.status === "scheduled" ? "scheduled" : message.status === "pending_approval" ? "pending" : "sent"
+      const view = { label: "View", onClick: () => void navigate({ to: "/app/mail", search: { folder, t: message.threadId } }) }
+      if (message.status === "scheduled") toast.success(message.sendAt ? `Scheduled for ${whenLabel(new Date(message.sendAt))}` : "Scheduled", { description: message.subject || undefined, action: view })
+      else if (message.status === "pending_approval") toast("Waiting for approval", { description: "This agent's send policy holds the message until a human approves it.", action: view })
+      else if (message.status === "failed") toast.error("Message failed to send", { description: message.error ?? undefined, action: view })
+      else toast.success("Sent", { description: message.subject || undefined, action: view })
       onClose()
     },
     onError: (e) => {
@@ -148,25 +208,62 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
     }
   })
 
-  const submit = () => {
+  const saveDraft = useMutation({
+    mutationFn: async () => {
+      if (draft.draftId) {
+        const id = draft.draftId
+        return api((c) => c.drafts.update({ params: { messageId: id }, payload: draftFields() }))
+      }
+      if (draft.replyTo && isReply) {
+        return api((c) =>
+          c.drafts.create({ payload: { replyToMessageId: draft.replyTo!.messageId, replyAll: mode === "replyAll", text: body, attachments: attachmentPayload() } })
+        )
+      }
+      return api((c) =>
+        c.drafts.create({ payload: { from: from || undefined, to, cc, bcc, subject, text: body, attachments: attachmentPayload() } })
+      )
+    },
+    onSuccess: () => {
+      refresh()
+      toast.success("Draft saved", { action: { label: "Drafts", onClick: () => void navigate({ to: "/app/mail", search: { folder: "drafts" } }) } })
+      onClose()
+    },
+    onError: (e) => {
+      setConfirmDiscard(false)
+      setError(e instanceof Error ? e.message : "Couldn't save the draft.")
+    }
+  })
+
+  const validate = () => {
     setError(null)
     if (!isReply) {
       const all = [...to, ...cc, ...bcc]
-      if (to.length === 0) return setError("Add at least one recipient.")
+      if (to.length === 0) return setError("Add at least one recipient."), false
       const bad = all.filter((r) => !parseAddress(r))
-      if (bad.length) return setError(`Invalid address: ${bad.join(", ")}`)
+      if (bad.length) return setError(`Invalid address: ${bad.join(", ")}`), false
     }
-    if (mode === "new" && !from) return setError("Choose an inbox to send from.")
-    if (!body.trim() && files.length === 0 && mode !== "forward") return setError("Write a message or attach a file.")
-    send.mutate()
+    if (mode === "new" && !from) return setError("Choose an inbox to send from."), false
+    if (!body.trim() && files.length === 0 && existingAttachments.length === 0 && mode !== "forward") return setError("Write a message or attach a file."), false
+    return true
   }
 
-  const requestClose = () => (dirty && !send.isPending ? setConfirmDiscard(true) : onClose())
+  const submit = (sendAt?: Date) => {
+    if (send.isPending || !validate()) return
+    if (sendAt && sendAt.getTime() <= Date.now() + 30_000) return setError("Pick a time in the future.")
+    setPicking(false)
+    send.mutate(sendAt?.toISOString())
+  }
+
+  const busy = send.isPending || saveDraft.isPending
+  const requestClose = () => (dirty && !busy ? setConfirmDiscard(true) : onClose())
 
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault()
       submit()
+    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && canSaveDraft) {
+      e.preventDefault()
+      if (!busy) saveDraft.mutate()
     } else if (e.key === "Escape" && !confirmDiscard) {
       e.preventDefault()
       e.stopPropagation()
@@ -194,8 +291,8 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
     setFiles((cur) => [...cur, ...next])
   }
 
-  const title = mode === "reply" ? "Reply" : mode === "replyAll" ? "Reply all" : mode === "forward" ? "Forward" : "New message"
-  const TitleIcon = mode === "reply" ? Reply : mode === "replyAll" ? ReplyAll : mode === "forward" ? Forward : Send
+  const title = draft.draftId ? "Draft" : mode === "reply" ? "Reply" : mode === "replyAll" ? "Reply all" : mode === "forward" ? "Forward" : "New message"
+  const TitleIcon = draft.draftId ? FileText : mode === "reply" ? Reply : mode === "replyAll" ? ReplyAll : mode === "forward" ? Forward : Send
 
   return (
     <>
@@ -362,6 +459,16 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                   ) : null}
                 </div>
               ) : null}
+              {existingAttachments.length ? (
+                <div className="flex flex-wrap gap-1.5 px-4 pb-2">
+                  {existingAttachments.map((name) => (
+                    <span key={name} className="inline-flex h-7 max-w-[260px] items-center gap-2 rounded-lg border border-line bg-bg-subtle/50 px-2 text-[12.5px] text-muted" title="Saved with the draft">
+                      <Paperclip className="size-3 shrink-0" />
+                      <span className="truncate">{name}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               {files.length ? (
                 <div className="flex flex-wrap gap-1.5 px-4 pb-3">
                   {files.map((f) => (
@@ -388,15 +495,73 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
               </div>
             ) : null}
 
+            {picking ? (
+              <div className="mx-3 mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-bg-subtle/60 px-3 py-2 animate-fade-in">
+                <CalendarClock className="size-4 text-muted" />
+                <label htmlFor="compose-send-at" className="text-[12.5px] text-muted">
+                  Send at
+                </label>
+                <input
+                  id="compose-send-at"
+                  type="datetime-local"
+                  value={customAt}
+                  min={toLocalInput(new Date())}
+                  onChange={(e) => setCustomAt(e.target.value)}
+                  className="h-[30px] rounded-lg border border-line bg-surface px-2 text-[13px] tabular-nums outline-none focus:border-ink/50 dark:[color-scheme:dark]"
+                />
+                <span className="ml-auto flex gap-1.5">
+                  <Button variant="ghost" size="sm" onClick={() => setPicking(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" loading={send.isPending} onClick={() => submit(new Date(customAt))}>
+                    Schedule
+                  </Button>
+                </span>
+              </div>
+            ) : null}
+
             <div className="flex shrink-0 items-center gap-1 border-t border-line px-3 py-2.5">
-              <Button onClick={submit} loading={send.isPending}>
-                Send
-                <span className="ml-0.5 hidden font-mono text-[11px] opacity-50 sm:inline">⌘↵</span>
-              </Button>
+              <div className="flex">
+                <Button onClick={() => submit()} loading={send.isPending} className="rounded-r-none">
+                  Send
+                  <span className="ml-0.5 hidden font-mono text-[11px] opacity-50 sm:inline">⌘↵</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownTrigger asChild>
+                    <Button aria-label="Schedule send" className="rounded-l-none border-l border-bg/20 px-2" disabled={send.isPending}>
+                      <ChevronDown />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownContent align="start" className="w-80">
+                    <DropdownLabel>Schedule send</DropdownLabel>
+                    {schedulePresets().map((p) => (
+                      <DropdownItem key={p.label} icon={<Clock />} onSelect={() => submit(p.at)}>
+                        <span className="flex w-full items-baseline justify-between gap-3 whitespace-nowrap">
+                          {p.label}
+                          <span className="text-[11.5px] text-muted tabular-nums">{whenLabel(p.at)}</span>
+                        </span>
+                      </DropdownItem>
+                    ))}
+                    <DropdownSeparator />
+                    <DropdownItem icon={<CalendarClock />} onSelect={() => setPicking(true)}>
+                      Pick date & time…
+                    </DropdownItem>
+                  </DropdownContent>
+                </DropdownMenu>
+              </div>
               {mode !== "forward" ? (
-                <Tooltip content="Attach files (or drop them here)">
-                  <Button variant="ghost" size="icon-sm" onClick={() => fileInput.current?.click()} aria-label="Attach files">
-                    <Paperclip />
+                <Tooltip content={existingAttachments.length ? "Attachments on a saved draft can't be changed here" : "Attach files (or drop them here)"}>
+                  <span>
+                    <Button variant="ghost" size="icon-sm" onClick={() => fileInput.current?.click()} aria-label="Attach files" disabled={existingAttachments.length > 0}>
+                      <Paperclip />
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : null}
+              {canSaveDraft ? (
+                <Tooltip content={<span className="flex items-center gap-1.5">Save draft<span className="font-mono text-[11px] opacity-60">⌘S</span></span>}>
+                  <Button variant="ghost" size="icon-sm" onClick={() => saveDraft.mutate()} loading={saveDraft.isPending} aria-label="Save draft" disabled={send.isPending}>
+                    {saveDraft.isPending ? null : <Save />}
                   </Button>
                 </Tooltip>
               ) : null}
@@ -412,18 +577,82 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
           </>
         ) : null}
       </div>
-      <ConfirmDialog
-        open={confirmDiscard}
-        onOpenChange={setConfirmDiscard}
-        title="Discard this draft?"
-        description="Your message hasn't been sent. Discarding it can't be undone."
-        confirmLabel="Discard"
-        onConfirm={() => {
-          setConfirmDiscard(false)
-          onClose()
-        }}
-      />
+      {canSaveDraft ? (
+        <CloseDialog
+          open={confirmDiscard}
+          onOpenChange={setConfirmDiscard}
+          saving={saveDraft.isPending}
+          existing={Boolean(draft.draftId)}
+          onSave={() => saveDraft.mutate()}
+          onDiscard={() => {
+            setConfirmDiscard(false)
+            onClose()
+          }}
+        />
+      ) : (
+        <ConfirmDialog
+          open={confirmDiscard}
+          onOpenChange={setConfirmDiscard}
+          title="Discard this message?"
+          description="Your message hasn't been sent. Discarding it can't be undone."
+          confirmLabel="Discard"
+          onConfirm={() => {
+            setConfirmDiscard(false)
+            onClose()
+          }}
+        />
+      )}
     </>
+  )
+}
+
+/** Unsaved changes on close: save as a draft, discard, or keep editing. */
+function CloseDialog({
+  open,
+  onOpenChange,
+  onSave,
+  onDiscard,
+  saving,
+  existing
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onSave: () => void
+  onDiscard: () => void
+  saving: boolean
+  existing: boolean
+}) {
+  return (
+    <AlertPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <AlertPrimitive.Portal>
+        <AlertPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-fade-in" />
+        <AlertPrimitive.Content className="fixed top-[20vh] left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-line bg-surface p-6 shadow-pop data-[state=open]:animate-pop">
+          <AlertPrimitive.Title className="text-base font-semibold">{existing ? "Save changes to this draft?" : "Save this as a draft?"}</AlertPrimitive.Title>
+          <AlertPrimitive.Description className="mt-2 text-sm leading-relaxed text-muted">
+            {existing ? "Your edits haven't been saved." : "Your message hasn't been sent. Keep it in Drafts to finish later."}
+          </AlertPrimitive.Description>
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            <Button variant="danger-ghost" onClick={onDiscard}>
+              {existing ? "Discard changes" : "Discard"}
+            </Button>
+            <span className="ml-auto flex gap-2">
+              <AlertPrimitive.Cancel asChild>
+                <Button variant="secondary">Keep editing</Button>
+              </AlertPrimitive.Cancel>
+              <Button
+                loading={saving}
+                onClick={(e) => {
+                  e.preventDefault()
+                  onSave()
+                }}
+              >
+                Save draft
+              </Button>
+            </span>
+          </div>
+        </AlertPrimitive.Content>
+      </AlertPrimitive.Portal>
+    </AlertPrimitive.Root>
   )
 }
 

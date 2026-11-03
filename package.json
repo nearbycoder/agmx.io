@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "brand": "tsx scripts/brand-assets.ts"
+    "brand": "tsx scripts/brand-assets.ts",
+    "sdk:types": "tsx scripts/gen-sdk-types.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",

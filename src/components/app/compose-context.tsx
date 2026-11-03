@@ -4,8 +4,13 @@ export interface ComposeDraft {
   from?: string
   to?: string
   cc?: string
+  bcc?: string
   subject?: string
   text?: string
+  /** Editing a saved draft: saves update it and sending sends it (keeping its thread). */
+  draftId?: string
+  /** Attachments already on the saved draft (shown read-only). */
+  attachmentNames?: ReadonlyArray<string>
   /** When set, the composer sends a reply/forward to this message instead of a new email. */
   replyTo?: { messageId: string; mode: "reply" | "replyAll" | "forward"; subject: string; quoted?: string }
 }

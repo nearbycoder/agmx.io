@@ -3,15 +3,14 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
-  CheckCircle2,
+  ChevronDown,
+  Clock,
   Copy,
   Download,
-  ExternalLink,
   FileText,
   Forward,
-  KeyRound,
-  Link2,
   MailOpen,
+  Pencil,
   MoreHorizontal,
   Reply,
   ReplyAll,
@@ -32,7 +31,10 @@ import { copyText, Skeleton } from "~/components/ui/misc"
 import { useThread } from "~/lib/queries"
 import { cn, formatBytes, fullDate, mailTime } from "~/lib/utils"
 import { HtmlFrame, PlainBody } from "./email-body"
-import { useMailActions } from "./use-mail-actions"
+import { ExtractedPanel, hasExtracted } from "./extracted-panel"
+import { formatWhen, useCancelScheduled } from "./queries"
+import { defaultBodyView, SecurityBanner, type BodyView } from "./security-banner"
+import { UNSENT, useMailActions } from "./use-mail-actions"
 
 export type ReplyMode = "reply" | "replyAll" | "forward"
 
@@ -43,13 +45,15 @@ export function ThreadView({
   onClose,
   onReply,
   onDeleted,
-  onArchived
+  onArchived,
+  onEditDraft
 }: {
   threadId: string
   onClose: () => void
   onReply: (message: MessageT, mode: ReplyMode) => void
   onDeleted: () => void
   onArchived: () => void
+  onEditDraft: (message: MessageT) => void
 }) {
   const { data: thread, isLoading, error } = useThread(threadId)
   const actions = useMailActions()
@@ -57,7 +61,10 @@ export function ThreadView({
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const messages = thread?.messages ?? []
-  const latest = messages[messages.length - 1]
+  // Replies and thread-level actions target real mail, not drafts or held messages.
+  const sentMessages = messages.filter((m) => !UNSENT.has(m.status))
+  const latest = sentMessages[sentMessages.length - 1] ?? messages[messages.length - 1]
+  const replyable = sentMessages.length > 0
   const latestInbound = [...messages].reverse().find((m) => m.direction === "inbound")
   const ids = messages.map((m) => m.id)
   const allArchived = messages.length > 0 && messages.filter((m) => m.direction === "inbound").every((m) => m.isArchived)
@@ -95,7 +102,11 @@ export function ThreadView({
     )
   }
 
-  const participantLine = thread.participants
+  // Threads holding only drafts or held mail have no participants yet; derive them from the messages.
+  const participants = thread.participants.length
+    ? thread.participants
+    : [...new Map(messages.flatMap((m) => [m.from, ...m.to]).map((a) => [a.address, a])).values()]
+  const participantLine = participants
     .slice(0, 5)
     .map((p) => p.name || p.address)
     .join(", ")
@@ -156,7 +167,7 @@ export function ThreadView({
           <h1 className="text-[20px] leading-snug font-semibold tracking-[-0.015em] text-balance">{thread.subject || "(no subject)"}</h1>
           <p className="mt-1.5 text-[13px] text-muted">
             {participantLine}
-            {thread.participants.length > 5 ? ` and ${thread.participants.length - 5} more` : ""}
+            {participants.length > 5 ? ` and ${participants.length - 5} more` : ""}
             <span className="mx-1.5 text-faint">·</span>
             {messages.length} message{messages.length === 1 ? "" : "s"}
           </p>
@@ -172,6 +183,7 @@ export function ThreadView({
                   onReply={(mode) => onReply(m, mode)}
                   onStar={() => actions.update([m.id], { isStarred: !m.isStarred })}
                   onDelete={() => actions.remove([m.id])}
+                  onEditDraft={() => onEditDraft(m)}
                 />
               ) : (
                 <button
@@ -182,6 +194,7 @@ export function ThreadView({
                 >
                   <SenderAvatar name={m.from.name} address={m.from.address} className="size-6 text-[9px]" />
                   <span className="w-40 shrink-0 truncate text-[13px] font-medium">{m.from.name || m.from.address}</span>
+                  {UNSENT.has(m.status) ? <StatusBadge status={m.status} sendAt={m.sendAt} /> : null}
                   <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{m.snippet}</span>
                   <span className="shrink-0 pr-1 text-[12px] text-muted tabular-nums">{mailTime(m.createdAt)}</span>
                 </button>
@@ -189,7 +202,7 @@ export function ThreadView({
             )}
           </div>
 
-          {latest ? (
+          {latest && replyable ? (
             <div className="mt-6 flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={() => onReply(latestInbound ?? latest, "reply")}>
                 <Reply /> Reply
@@ -250,7 +263,8 @@ function MessageItem({
   onCollapse,
   onReply,
   onStar,
-  onDelete
+  onDelete,
+  onEditDraft
 }: {
   message: MessageT
   collapsible: boolean
@@ -258,15 +272,17 @@ function MessageItem({
   onReply: (mode: ReplyMode) => void
   onStar: () => void
   onDelete: () => void
+  onEditDraft: () => void
 }) {
+  const [view, setView] = useState<BodyView>(() => defaultBodyView(m))
+  const cancelScheduled = useCancelScheduled()
+  const unsent = UNSENT.has(m.status)
   const recipients = useMemo(
     () => [...m.to.map((a) => ({ kind: "to", a })), ...m.cc.map((a) => ({ kind: "cc", a })), ...m.bcc.map((a) => ({ kind: "bcc", a }))],
     [m]
   )
   const verdicts = (["spf", "dkim", "dmarc"] as const).map((k) => ({ k, v: m.verdicts[k] })).filter((x) => x.v)
   const allPass = verdicts.length > 0 && verdicts.every((x) => verdictPass(x.v))
-  const actionLinks = m.extracted.links.filter((l) => l.kind === "verify" || l.kind === "login" || l.kind === "reset").slice(0, 3)
-  const showExtracted = m.direction === "inbound" && (m.extracted.codes.length > 0 || actionLinks.length > 0)
   const files = m.attachments.filter((a) => !a.inline)
   const failed = m.error && (m.status === "failed" || m.status === "bounced" || m.status === "complained")
 
@@ -301,11 +317,19 @@ function MessageItem({
               <Star className={cn(m.isStarred && "fill-warn text-warn")} />
             </Button>
           </Tooltip>
-          <Tooltip content="Reply">
-            <Button variant="ghost" size="icon-sm" onClick={() => onReply("reply")} aria-label="Reply">
-              <Reply />
-            </Button>
-          </Tooltip>
+          {m.status === "draft" ? (
+            <Tooltip content="Edit draft">
+              <Button variant="ghost" size="icon-sm" onClick={onEditDraft} aria-label="Edit draft">
+                <Pencil />
+              </Button>
+            </Tooltip>
+          ) : !unsent ? (
+            <Tooltip content="Reply">
+              <Button variant="ghost" size="icon-sm" onClick={() => onReply("reply")} aria-label="Reply">
+                <Reply />
+              </Button>
+            </Tooltip>
+          ) : null}
           <DropdownMenu>
             <DropdownTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label="Message actions">
@@ -313,16 +337,34 @@ function MessageItem({
               </Button>
             </DropdownTrigger>
             <DropdownContent>
-              <DropdownItem icon={<Reply />} onSelect={() => onReply("reply")} shortcut="R">
-                Reply
-              </DropdownItem>
-              <DropdownItem icon={<ReplyAll />} onSelect={() => onReply("replyAll")} shortcut="A">
-                Reply all
-              </DropdownItem>
-              <DropdownItem icon={<Forward />} onSelect={() => onReply("forward")} shortcut="F">
-                Forward
-              </DropdownItem>
-              <DropdownSeparator />
+              {m.status === "draft" ? (
+                <>
+                  <DropdownItem icon={<Pencil />} onSelect={onEditDraft}>
+                    Edit draft
+                  </DropdownItem>
+                  <DropdownSeparator />
+                </>
+              ) : m.status === "scheduled" ? (
+                <>
+                  <DropdownItem icon={<Clock />} onSelect={() => cancelScheduled.mutate(m.id)}>
+                    Cancel scheduled send
+                  </DropdownItem>
+                  <DropdownSeparator />
+                </>
+              ) : !unsent ? (
+                <>
+                  <DropdownItem icon={<Reply />} onSelect={() => onReply("reply")} shortcut="R">
+                    Reply
+                  </DropdownItem>
+                  <DropdownItem icon={<ReplyAll />} onSelect={() => onReply("replyAll")} shortcut="A">
+                    Reply all
+                  </DropdownItem>
+                  <DropdownItem icon={<Forward />} onSelect={() => onReply("forward")} shortcut="F">
+                    Forward
+                  </DropdownItem>
+                  <DropdownSeparator />
+                </>
+              ) : null}
               <DropdownItem icon={<Copy />} onSelect={() => void copyText(m.id, "Message id copied")}>
                 Copy message id
               </DropdownItem>
@@ -341,9 +383,9 @@ function MessageItem({
       </header>
 
       <div className="sm:pl-11">
-        {m.direction === "outbound" || m.isSpam || verdicts.length ? (
+        {(m.direction === "outbound" && !unsent) || m.isSpam || verdicts.length ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted">
-            {m.direction === "outbound" ? <StatusBadge status={m.status} /> : null}
+            {m.direction === "outbound" && !unsent ? <StatusBadge status={m.status} sendAt={m.sendAt} /> : null}
             {m.isSpam ? (
               <span className="inline-flex items-center gap-1 font-medium text-danger">
                 <ShieldAlert className="size-3.5" /> Marked as spam
@@ -370,52 +412,54 @@ function MessageItem({
           </div>
         ) : null}
 
-        {showExtracted ? (
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-lg border border-line bg-bg-subtle/60 px-3.5 py-3">
-            <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
-              <KeyRound className="size-3.5" />
-              {m.extracted.codes.length ? "Verification code" : "Action links"}
-            </span>
-            {m.extracted.codes.map((code, i) => (
-              <Tooltip key={code} content="Copy code">
-                <button
-                  type="button"
-                  onClick={() => void copyText(code, `Code ${code} copied`)}
-                  className={cn(
-                    "group inline-flex items-center gap-2 rounded-md font-mono font-semibold tracking-[0.14em] transition-colors",
-                    i === 0
-                      ? "bg-accent-soft px-2.5 py-1 text-[15px] text-accent-ink ring-1 ring-accent/50 hover:ring-accent"
-                      : "px-1.5 py-0.5 text-[13px] text-ink-2 ring-1 ring-line hover:ring-line-strong"
-                  )}
-                >
-                  {code}
-                  <Copy className="size-3.5 opacity-60 group-hover:opacity-100" />
-                </button>
-              </Tooltip>
-            ))}
-            {actionLinks.length ? (
-              <span className="flex flex-wrap gap-1.5">
-                {actionLinks.map((link) => (
-                  <a
-                    key={link.url}
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    title={link.url}
-                    className="inline-flex h-[30px] max-w-[260px] items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[13px] font-medium transition-colors hover:border-line-strong"
-                  >
-                    {link.kind === "verify" ? <CheckCircle2 className="size-3.5 text-ok" /> : <Link2 className="size-3.5 text-muted" />}
-                    <span className="truncate">{link.text || (link.kind === "verify" ? "Verify" : link.kind === "login" ? "Sign in" : "Reset password")}</span>
-                    <ExternalLink className="size-3 shrink-0 text-faint" />
-                  </a>
-                ))}
-              </span>
-            ) : null}
-          </div>
+        {m.status === "scheduled" ? (
+          <OutboxNote
+            icon={<Clock />}
+            tone="info"
+            action={
+              <Button variant="secondary" size="sm" loading={cancelScheduled.isPending} onClick={() => cancelScheduled.mutate(m.id)}>
+                Cancel scheduled send
+              </Button>
+            }
+          >
+            {m.sendAt ? `Scheduled to send ${formatWhen(m.sendAt)}.` : "Scheduled to send."}
+          </OutboxNote>
+        ) : m.status === "pending_approval" ? (
+          <OutboxNote icon={<ShieldAlert />} tone="warn">
+            The agent's send policy is holding this message. It goes out once a human approves it.
+          </OutboxNote>
+        ) : m.status === "rejected" ? (
+          <OutboxNote icon={<AlertTriangle />} tone="danger">
+            {rejectionText(m.error)}
+          </OutboxNote>
+        ) : m.status === "draft" ? (
+          <OutboxNote
+            icon={<Pencil />}
+            tone="neutral"
+            action={
+              <Button variant="secondary" size="sm" onClick={onEditDraft}>
+                <Pencil /> Edit draft
+              </Button>
+            }
+          >
+            This is an unsent draft.
+          </OutboxNote>
         ) : null}
 
+        <SecurityBanner message={m} view={view} onViewChange={setView} />
+
+        {hasExtracted(m) ? <ExtractedPanel extracted={m.extracted} /> : null}
+
         <div className="mt-4">
-          {m.html ? <HtmlFrame html={m.html} attachments={m.attachments} /> : m.text ? <PlainBody text={m.text} /> : <p className="text-[13px] text-muted italic">(empty message)</p>}
+          {view === "safe" && m.direction === "inbound" ? (
+            <PlainBody text={m.safeText ?? m.text ?? ""} />
+          ) : m.html ? (
+            <HtmlFrame html={m.html} attachments={m.attachments} />
+          ) : m.text ? (
+            <PlainBody text={m.text} />
+          ) : (
+            <p className="text-[13px] text-muted italic">(empty message)</p>
+          )}
         </div>
 
         {files.length ? (
@@ -423,24 +467,9 @@ function MessageItem({
             <div className="mb-2 text-[12px] text-muted">
               {files.length} attachment{files.length === 1 ? "" : "s"}
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid items-start gap-2 sm:grid-cols-2">
               {files.map((a) => (
-                <a key={a.id} href={a.downloadUrl} className="group flex items-center gap-3 rounded-lg border border-line p-2 pr-3 transition-colors hover:border-line-strong hover:bg-bg-subtle/40">
-                  {a.contentType.startsWith("image/") ? (
-                    <img src={`${a.downloadUrl}?inline=1`} alt="" className="size-9 shrink-0 rounded-md object-cover ring-1 ring-line" loading="lazy" />
-                  ) : (
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-bg-subtle text-muted">
-                      <FileText className="size-4" />
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium">{a.filename}</span>
-                    <span className="block text-[12px] text-muted">
-                      {formatBytes(a.size)} · {(a.contentType.split("/")[1] ?? a.contentType).toUpperCase()}
-                    </span>
-                  </span>
-                  <Download className="size-4 text-faint transition-colors group-hover:text-ink" />
-                </a>
+                <AttachmentTile key={a.id} attachment={a} />
               ))}
             </div>
           </div>
@@ -450,17 +479,87 @@ function MessageItem({
   )
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, sendAt }: { status: string; sendAt?: string | null }) {
   const map: Record<string, { tone: "ok" | "warn" | "danger" | "neutral" | "info"; label: string }> = {
     sending: { tone: "warn", label: "Sending" },
     sent: { tone: "info", label: "Sent" },
     delivered: { tone: "ok", label: "Delivered" },
     bounced: { tone: "danger", label: "Bounced" },
     complained: { tone: "danger", label: "Complaint" },
-    failed: { tone: "danger", label: "Failed" }
+    failed: { tone: "danger", label: "Failed" },
+    draft: { tone: "neutral", label: "Draft" },
+    scheduled: { tone: "info", label: sendAt ? `Scheduled · ${formatWhen(sendAt)}` : "Scheduled" },
+    pending_approval: { tone: "warn", label: "Awaiting approval" },
+    rejected: { tone: "danger", label: "Rejected" }
   }
   const s = map[status] ?? { tone: "neutral" as const, label: status }
   return <Badge tone={s.tone}>{s.label}</Badge>
+}
+
+/** "Rejected: Looks like spam" → "Rejected: Looks like spam. It was never sent." */
+const rejectionText = (error: string | null) => {
+  const reason = (error ?? "Rejected by a reviewer").trim().replace(/[.!?]+$/, "")
+  return `${reason}. It was never sent.`
+}
+
+function OutboxNote({ icon, tone, action, children }: { icon: ReactNode; tone: "info" | "warn" | "danger" | "neutral"; action?: ReactNode; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3.5 py-2.5 text-[12.5px] [&>svg]:size-4 [&>svg]:shrink-0",
+        tone === "info" && "border-info/20 bg-info-soft text-info",
+        tone === "warn" && "border-warn/25 bg-warn-soft text-warn",
+        tone === "danger" && "border-danger/20 bg-danger-soft text-danger",
+        tone === "neutral" && "border-line bg-bg-subtle/60 text-muted"
+      )}
+    >
+      {icon}
+      <span className="min-w-0 flex-1 text-ink-2 [overflow-wrap:anywhere]">{children}</span>
+      {action}
+    </div>
+  )
+}
+
+function AttachmentTile({ attachment: a }: { attachment: MessageT["attachments"][number] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className={cn("rounded-lg border border-line transition-colors", open ? "sm:col-span-2" : "hover:border-line-strong")}>
+      <a href={a.downloadUrl} className="group flex items-center gap-3 p-2 pr-3 hover:bg-bg-subtle/40">
+        {a.contentType.startsWith("image/") ? (
+          <img src={`${a.downloadUrl}?inline=1`} alt="" className="size-9 shrink-0 rounded-md object-cover ring-1 ring-line" loading="lazy" />
+        ) : (
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-bg-subtle text-muted">
+            <FileText className="size-4" />
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium">{a.filename}</span>
+          <span className="block text-[12px] text-muted">
+            {formatBytes(a.size)} · {(a.contentType.split("/")[1] ?? a.contentType).toUpperCase()}
+          </span>
+        </span>
+        <Download className="size-4 text-faint transition-colors group-hover:text-ink" />
+      </a>
+      {a.extractedText ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="flex w-full items-center gap-1.5 border-t border-line px-3 py-1.5 text-left text-[12px] text-muted transition-colors hover:text-ink"
+          >
+            <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} />
+            {open ? "Hide text preview" : "Text preview"}
+          </button>
+          {open ? (
+            <pre className="scrollbar-thin max-h-64 overflow-auto border-t border-line bg-bg-subtle/50 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-ink-2 [overflow-wrap:anywhere]">
+              {a.extractedText}
+            </pre>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  )
 }
 
 function ReaderSkeleton({ onClose }: { onClose: () => void }) {

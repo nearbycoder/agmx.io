@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   Shield,
+  ShieldCheck,
   Sun
 } from "lucide-react"
 import { useState, type ReactNode } from "react"
@@ -24,6 +25,7 @@ import { Button } from "~/components/ui/button"
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { Kbd, Meter } from "~/components/ui/misc"
 import { authClient } from "~/lib/auth-client"
+import { useApprovals } from "~/components/dashboard/queries"
 import { useAgents, useMe, useSignupRequests } from "~/lib/queries"
 import type { SessionUser } from "~/lib/session"
 import { useTheme } from "~/lib/theme"
@@ -34,6 +36,7 @@ import { useCompose } from "./compose-context"
 const NAV = [
   { to: "/app", label: "Overview", icon: LayoutGrid, exact: true },
   { to: "/app/mail", label: "Mail", icon: Inbox },
+  { to: "/app/approvals", label: "Approvals", icon: ShieldCheck },
   { to: "/app/agents", label: "Agents", icon: Bot },
   { to: "/app/domains", label: "Domains", icon: Globe },
   { to: "/app/keys", label: "API keys", icon: KeyRound },
@@ -87,6 +90,8 @@ function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate
   const { data: me } = useMe()
   const { data: agents } = useAgents()
   const { data: signups } = useSignupRequests()
+  const { data: approvals } = useApprovals()
+  const held = approvals?.length ?? 0
   const compose = useCompose()
   const unread = agents?.reduce((sum, a) => sum + a.inboxes.reduce((s, i) => s + i.unreadCount, 0), 0) ?? 0
   const items = [...NAV, ...(user.role === "admin" ? [{ to: "/app/admin", label: "Operator", icon: Shield } as const] : [])]
@@ -145,6 +150,11 @@ function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate
               <item.icon className={cn("size-4", active ? "text-ink" : "text-muted")} />
               {item.label}
               {count !== null ? <span className="ml-auto text-[12px] font-medium text-muted tabular-nums">{count}</span> : null}
+              {item.label === "Approvals" && held > 0 ? (
+                <Tooltip content={`${held} message${held === 1 ? "" : "s"} waiting for approval`}>
+                  <span className="ml-auto rounded-md bg-warn-soft px-1.5 text-[11.5px] font-medium text-warn tabular-nums">{held}</span>
+                </Tooltip>
+              ) : null}
               {pending ? (
                 <Tooltip content={`${signups!.length} sign-up request${signups!.length === 1 ? "" : "s"} waiting`}>
                   <span className="ml-auto size-1.5 rounded-full bg-warn" />

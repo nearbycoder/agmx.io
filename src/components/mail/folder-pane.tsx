@@ -1,13 +1,17 @@
 import { Link } from "@tanstack/react-router"
-import { Archive, Inbox, Layers, Send, ShieldAlert, Star } from "lucide-react"
+import { Archive, Clock, FileText, Inbox, Layers, Send, ShieldAlert, ShieldQuestion, Star } from "lucide-react"
 import type { AgentT } from "~/shared/api/domain"
 import { AgentAvatar } from "~/components/brand"
 import { cn } from "~/lib/utils"
+import { useFolderCounts } from "./queries"
 
 export const FOLDERS = [
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "starred", label: "Starred", icon: Star },
   { id: "sent", label: "Sent", icon: Send },
+  { id: "drafts", label: "Drafts", icon: FileText },
+  { id: "scheduled", label: "Scheduled", icon: Clock },
+  { id: "pending", label: "Awaiting approval", icon: ShieldQuestion },
   { id: "archived", label: "Archived", icon: Archive },
   { id: "spam", label: "Spam", icon: ShieldAlert },
   { id: "all", label: "All mail", icon: Layers }
@@ -21,13 +25,18 @@ const rowClass = (active: boolean) =>
     active ? "bg-bg-subtle font-medium text-ink" : "text-ink-2 hover:bg-bg-subtle/60 hover:text-ink"
   )
 
-const Count = ({ value, strong }: { value: number; strong?: boolean }) =>
-  value > 0 ? <span className={cn("ml-auto text-[12px] tabular-nums", strong ? "font-semibold text-ink" : "text-muted")}>{value}</span> : null
+const Count = ({ value, strong, tone, capped }: { value: number; strong?: boolean; tone?: "warn"; capped?: number }) =>
+  value > 0 ? (
+    <span className={cn("ml-auto text-[12px] tabular-nums", tone === "warn" ? "font-semibold text-warn" : strong ? "font-semibold text-ink" : "text-muted")}>
+      {capped && value >= capped ? `${capped}+` : value}
+    </span>
+  ) : null
 
 export function FolderPane({ folder, inbox, agents }: { folder: FolderId; inbox?: string; agents: ReadonlyArray<AgentT> }) {
   const inboxes = agents.flatMap((a) => a.inboxes.map((i) => ({ ...i, agent: a })))
   const totalUnread = inboxes.reduce((s, i) => s + i.unreadCount, 0)
   const selectedUnread = inbox ? (inboxes.find((i) => i.id === inbox)?.unreadCount ?? 0) : totalUnread
+  const counts = useFolderCounts(inbox)
 
   return (
     <nav aria-label="Mail folders" className="scrollbar-thin flex h-full w-[228px] shrink-0 flex-col overflow-y-auto border-r border-line bg-bg px-3 py-4">
@@ -44,6 +53,8 @@ export function FolderPane({ folder, inbox, agents }: { folder: FolderId; inbox?
               <f.icon className={cn("size-4", active ? "text-ink" : "text-muted group-hover:text-ink-2")} />
               {f.label}
               {f.id === "inbox" ? <Count value={selectedUnread} strong /> : null}
+              {f.id === "drafts" ? <Count value={counts.drafts} capped={counts.capped} /> : null}
+              {f.id === "pending" ? <Count value={counts.pending} tone="warn" capped={counts.capped} /> : null}
             </Link>
           )
         })}

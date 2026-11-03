@@ -21,7 +21,7 @@ const call = async (method: string, path: string, body?: unknown, key = ownerKey
   return { status: res.status, body: text ? JSON.parse(text) : null }
 }
 
-const runtimeCall = async <A>(f: (services: { Mail: any; Agents: any }) => Effect.Effect<A, any, any>) => {
+const runtimeCall = async <A = any>(f: (services: { Mail: any; Agents: any }) => Effect.Effect<A, any, any>): Promise<A> => {
   const [{ runtime }, { Mail }, { Agents }] = await Promise.all([import("~/server/runtime"), import("~/server/services/Mail"), import("~/server/services/Agents")])
   return runtime.runPromise(f({ Mail, Agents }) as Effect.Effect<A, never, never>)
 }
@@ -40,7 +40,7 @@ const inject = async (to: string, opts: { from?: string; subject?: string; text?
     messageId: `<${crypto.randomUUID()}@example.com>`,
     attachments: opts.attachments ?? []
   })
-  return runtimeCall(({ Mail }) => Effect.flatMap(Effect.service(Mail), (m: any) => m.ingestRaw(raw, [to], {})))
+  return runtimeCall<{ delivered: number }>(({ Mail }) => Effect.flatMap(Effect.service(Mail), (m: any) => m.ingestRaw(raw, [to], {})))
 }
 
 let agent: { id: string; key: string; inbox: string; address: string }
@@ -53,7 +53,7 @@ beforeAll(async () => {
   await admin.end()
   const [{ apiHandler }] = await Promise.all([import("~/server/http/web-handler")])
   handler = (req) => apiHandler.handler(req)
-  ownerKey = (await runtimeCall(({ Agents }) => Effect.flatMap(Effect.service(Agents), (a: any) => a.mintKey(ownerId, null, "test")))).key
+  ownerKey = (await runtimeCall<{ key: string }>(({ Agents }) => Effect.flatMap(Effect.service(Agents), (a: any) => a.mintKey(ownerId, null, "test")))).key
   const created = await call("POST", "/agents", { name: "Scout", username: "scout", createApiKey: true })
   agent = { id: created.body.agent.id, key: created.body.apiKey, inbox: created.body.agent.inboxes[0].id, address: created.body.agent.inboxes[0].address }
   await call("POST", "/agents", { name: "Ledger", username: "ledger" })

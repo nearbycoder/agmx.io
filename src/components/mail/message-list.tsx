@@ -1,9 +1,11 @@
-import { Paperclip, Star } from "lucide-react"
+import { Paperclip, ShieldAlert, Star } from "lucide-react"
 import { forwardRef, useEffect, useRef } from "react"
 import type { MessageSummaryT } from "~/shared/api/domain"
 import { AgentAvatar } from "~/components/brand"
 import { copyText, Skeleton } from "~/components/ui/misc"
+import { Tooltip } from "~/components/ui/menu"
 import { cn, mailTime } from "~/lib/utils"
+import { formatWhen } from "./queries"
 
 export interface ListRow {
   message: MessageSummaryT
@@ -23,7 +25,11 @@ const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
   sending: { label: "Sending", tone: "text-warn" },
   failed: { label: "Failed", tone: "text-danger" },
   bounced: { label: "Bounced", tone: "text-danger" },
-  complained: { label: "Complaint", tone: "text-danger" }
+  complained: { label: "Complaint", tone: "text-danger" },
+  draft: { label: "Draft", tone: "text-danger/90" },
+  scheduled: { label: "Scheduled", tone: "text-info" },
+  pending_approval: { label: "Awaiting approval", tone: "text-warn" },
+  rejected: { label: "Rejected", tone: "text-danger" }
 }
 
 export const MessageRow = forwardRef<
@@ -42,6 +48,9 @@ export const MessageRow = forwardRef<
   const code = m.extracted.codes[0]
   const status = STATUS_LABEL[m.status]
   const hasMeta = Boolean(code) || m.labels.length > 0
+  const risk = m.direction === "inbound" && m.security && m.security.risk !== "low" ? m.security.risk : null
+  // Drafts and scheduled mail show when they're due, not when they were created.
+  const when = m.status === "scheduled" && m.sendAt ? m.sendAt : m.createdAt
 
   return (
     <div
@@ -67,9 +76,18 @@ export const MessageRow = forwardRef<
         <span className={cn("min-w-0 truncate text-[13.5px]", unread ? "font-semibold text-ink" : "text-ink-2")}>{counterparty(m)}</span>
         {status ? <span className={cn("shrink-0 text-[11.5px] font-medium", status.tone)}>{status.label}</span> : null}
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {risk ? (
+            <Tooltip content={risk === "high" ? "Hidden or manipulative content" : "Possibly manipulative content"}>
+              <span className="flex" aria-label={`${risk} risk`}>
+                <ShieldAlert className={cn("size-3.5", risk === "high" ? "text-danger" : "text-warn")} />
+              </span>
+            </Tooltip>
+          ) : null}
           {m.attachmentCount ? <Paperclip className="size-3 text-faint" aria-label={`${m.attachmentCount} attachments`} /> : null}
           {m.isStarred ? <Star className="size-3 fill-warn text-warn" aria-label="Starred" /> : null}
-          <span className={cn("text-[12px] tabular-nums", unread ? "font-medium text-ink" : "text-muted")}>{mailTime(m.createdAt)}</span>
+          <span className={cn("text-[12px] tabular-nums", unread ? "font-medium text-ink" : "text-muted", m.status === "scheduled" && "text-info")} title={m.status === "scheduled" ? `Sends ${formatWhen(when)}` : undefined}>
+            {mailTime(when)}
+          </span>
         </span>
       </div>
 

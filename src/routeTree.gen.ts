@@ -22,6 +22,7 @@ import { Route as SkillDotmdRouteImport } from './routes/skill[.]md'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
+import { Route as AppApprovalsRouteImport } from './routes/app/approvals'
 import { Route as AppDomainsRouteImport } from './routes/app/domains'
 import { Route as AppKeysRouteImport } from './routes/app/keys'
 import { Route as AppMailRouteImport } from './routes/app/mail'
@@ -99,6 +100,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
+const AppApprovalsRoute = AppApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDomainsRoute = AppDomainsRouteImport.update({
   id: '/domains',
   path: '/domains',
@@ -168,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/skill.md': typeof SkillDotmdRoute
   '/api/events': typeof ApiEventsRoute
   '/app/admin': typeof AppAdminRoute
+  '/app/approvals': typeof AppApprovalsRoute
   '/app/domains': typeof AppDomainsRoute
   '/app/keys': typeof AppKeysRoute
   '/app/mail': typeof AppMailRoute
@@ -193,6 +200,7 @@ export interface FileRoutesByTo {
   '/skill.md': typeof SkillDotmdRoute
   '/api/events': typeof ApiEventsRoute
   '/app/admin': typeof AppAdminRoute
+  '/app/approvals': typeof AppApprovalsRoute
   '/app/domains': typeof AppDomainsRoute
   '/app/keys': typeof AppKeysRoute
   '/app/mail': typeof AppMailRoute
@@ -220,6 +228,7 @@ export interface FileRoutesById {
   '/skill.md': typeof SkillDotmdRoute
   '/api/events': typeof ApiEventsRoute
   '/app/admin': typeof AppAdminRoute
+  '/app/approvals': typeof AppApprovalsRoute
   '/app/domains': typeof AppDomainsRoute
   '/app/keys': typeof AppKeysRoute
   '/app/mail': typeof AppMailRoute
@@ -248,6 +257,7 @@ export interface FileRouteTypes {
     | '/skill.md'
     | '/api/events'
     | '/app/admin'
+    | '/app/approvals'
     | '/app/domains'
     | '/app/keys'
     | '/app/mail'
@@ -273,6 +283,7 @@ export interface FileRouteTypes {
     | '/skill.md'
     | '/api/events'
     | '/app/admin'
+    | '/app/approvals'
     | '/app/domains'
     | '/app/keys'
     | '/app/mail'
@@ -299,6 +310,7 @@ export interface FileRouteTypes {
     | '/skill.md'
     | '/api/events'
     | '/app/admin'
+    | '/app/approvals'
     | '/app/domains'
     | '/app/keys'
     | '/app/mail'
@@ -425,6 +437,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/approvals': {
+      id: '/app/approvals'
+      path: '/approvals'
+      fullPath: '/app/approvals'
+      preLoaderRoute: typeof AppApprovalsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/domains': {
       id: '/app/domains'
       path: '/domains'
@@ -507,6 +526,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
+  AppApprovalsRoute: typeof AppApprovalsRoute
   AppDomainsRoute: typeof AppDomainsRoute
   AppKeysRoute: typeof AppKeysRoute
   AppMailRoute: typeof AppMailRoute
@@ -518,6 +538,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
+  AppApprovalsRoute: AppApprovalsRoute,
   AppDomainsRoute: AppDomainsRoute,
   AppKeysRoute: AppKeysRoute,
   AppMailRoute: AppMailRoute,

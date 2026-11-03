@@ -20,20 +20,17 @@ export const useMailActions = () => {
   const queryClient = useQueryClient()
 
   const patchCaches = (ids: ReadonlySet<string>, patch: MessagePatch | "delete") => {
-    queryClient.setQueriesData<InfiniteData<Page>>({ queryKey: ["messages"] }, (old) =>
-      old
-        ? {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages:
-                patch === "delete"
-                  ? page.messages.filter((m) => !ids.has(m.id))
-                  : page.messages.map((m) => (ids.has(m.id) ? { ...m, ...patch } : m))
-            }))
-          }
-        : old
-    )
+    const patchPage = (page: Page): Page => ({
+      ...page,
+      messages: patch === "delete" ? page.messages.filter((m) => !ids.has(m.id)) : page.messages.map((m) => (ids.has(m.id) ? { ...m, ...patch } : m))
+    })
+    // ["messages", …] holds paginated lists and single-page lists (folder counts).
+    queryClient.setQueriesData<InfiniteData<Page> | Page>({ queryKey: ["messages"] }, (old) => {
+      if (!old) return old
+      if ("pages" in old) return { ...old, pages: old.pages.map(patchPage) }
+      if ("messages" in old) return patchPage(old)
+      return old
+    })
     queryClient.setQueriesData<Thread>({ queryKey: ["thread"] }, (old) =>
       old && old.messages
         ? {
@@ -86,20 +83,29 @@ export const useMailActions = () => {
   }
 }
 
+/** Outbound statuses that aren't real, sent mail yet. */
+export const UNSENT = new Set(["draft", "scheduled", "pending_approval", "rejected"])
+
 /** Whether a message still belongs in the folder after a local flag change. */
 export const matchesFolder = (m: MessageSummaryT, folder: string) => {
   switch (folder) {
     case "inbox":
       return m.direction === "inbound" && !m.isArchived && !m.isSpam
     case "sent":
-      return m.direction === "outbound"
+      return m.direction === "outbound" && !UNSENT.has(m.status)
+    case "drafts":
+      return m.status === "draft"
+    case "scheduled":
+      return m.status === "scheduled"
+    case "pending":
+      return m.status === "pending_approval" || m.status === "rejected"
     case "starred":
-      return m.isStarred
+      return m.isStarred && m.status !== "draft"
     case "archived":
-      return m.isArchived
+      return m.isArchived && m.status !== "draft"
     case "spam":
       return m.isSpam
     default:
-      return true
+      return m.status !== "draft"
   }
 }

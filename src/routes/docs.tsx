@@ -14,7 +14,7 @@ export const Route = createFileRoute("/docs")({
       siteUrl: siteUrlFrom(match),
       path: "/docs",
       title: "Documentation — AGMX",
-      description: "AGMX docs: agent self sign-up, sending and receiving email, verification-code extraction, long-polling, webhooks, the MCP server, custom domains and self-hosting.",
+      description: "AGMX docs: agent self sign-up, prompt-injection protection, send approvals, drafts and scheduling, temporary inboxes, sender rules, webhooks, MCP, SDKs and self-hosting.",
       image: "/og/docs.png",
       type: "article"
     }),
@@ -34,11 +34,21 @@ const NAV: Array<{ group: string; items: Array<{ id: string; label: string }> }>
     group: "Email",
     items: [
       { id: "inboxes", label: "Inboxes" },
+      { id: "temporary", label: "Temporary inboxes" },
       { id: "sending", label: "Sending" },
+      { id: "drafts", label: "Drafts & scheduling" },
       { id: "receiving", label: "Receiving" },
       { id: "waiting", label: "Waiting for email" },
       { id: "threads", label: "Replies & threads" },
-      { id: "organizing", label: "Flags & labels" }
+      { id: "organizing", label: "Flags & labels" },
+      { id: "rules", label: "Sender rules" }
+    ]
+  },
+  {
+    group: "Safety",
+    items: [
+      { id: "security", label: "Reading mail safely" },
+      { id: "approvals", label: "Send approvals" }
     ]
   },
   {
@@ -46,6 +56,7 @@ const NAV: Array<{ group: string; items: Array<{ id: string; label: string }> }>
     items: [
       { id: "webhooks", label: "Webhooks" },
       { id: "mcp", label: "MCP server" },
+      { id: "sdks", label: "SDKs & CLI" },
       { id: "domains", label: "Custom domains" }
     ]
   },
@@ -166,7 +177,8 @@ function DocsPage() {
                 <strong>Inbox</strong> — a real address such as <code>scout@bot.agmx.io</code>, or one on your own domain.
               </li>
               <li>
-                <strong>Message</strong> — an inbound or outbound email, with <code>extracted.codes</code> and <code>extracted.links</code> for inbound mail.
+                <strong>Message</strong> — an inbound or outbound email. Inbound mail carries a <code>security</code> report, a cleaned <code>safeText</code> and{" "}
+                <code>extracted</code> data (codes, links, events, receipts, tracking numbers).
               </li>
               <li>
                 <strong>Thread</strong> — a conversation. Replies are grouped using <code>In-Reply-To</code> and <code>References</code> headers.
@@ -304,7 +316,10 @@ function DocsPage() {
               { name: "username", type: "string", description: "Local part: lowercase letters, numbers, ., _ and -, 3–64 characters. Omit for a random friendly name like swift-otter-4821." },
               { name: "displayName", type: "string | null", description: "The name recipients see, e.g. “Billing Bot”." },
               { name: "domain", type: "string", description: "A verified custom domain on your account. Defaults to the shared domain." },
-              { name: "agentId", type: "string", description: "Required with account keys and sessions; implied with agent keys." }
+              { name: "agentId", type: "string", description: "Required with account keys and sessions; implied with agent keys." },
+              { name: "expiresIn", type: "number", description: <>Seconds until the inbox and its mail are deleted (60 – 604800). See <a href="#temporary">temporary inboxes</a>.</> },
+              { name: "maxMessages", type: "number", description: "Stop accepting mail after this many messages." },
+              { name: "acceptFrom", type: "string[]", description: <>Only accept mail from these addresses or domains. Creates <a href="#rules">allow rules</a>.</> }
             ]}
           />
           <p>
@@ -312,6 +327,33 @@ function DocsPage() {
             <code>{'{"status": "paused"}'}</code>), and <code>DELETE /inboxes/{"{id}"}</code> to release the address. Paused inboxes neither send nor receive. Reserved names such
             as <code>postmaster</code> or <code>admin</code> can't be claimed.
           </p>
+
+          {/* ------------------------------------------------------------- */}
+          <H2 id="temporary">
+            Temporary inboxes
+          </H2>
+          <p>
+            Most agent mail is “sign up somewhere, grab the code, move on”. A temporary inbox exists for exactly that: it deletes itself — with its mail — when it expires, and
+            temporary inboxes don't count against your plan's inboxes-per-agent limit (up to 10 per agent at once).
+          </p>
+          <CodeBlock
+            lang="bash"
+            code={`curl -X POST ${api}/inboxes \\
+  -H "Authorization: Bearer $AGMX_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "expiresIn": 3600, "maxMessages": 1, "acceptFrom": ["github.com"] }'
+
+# → { "address": "tmp-swift-otter-4821@bot.agmx.io", "temporary": true, "expiresAt": "…", "maxMessages": 1, … }`}
+          />
+          <ul>
+            <li>
+              <code>maxMessages</code> closes the inbox once it has received that many messages; later mail is dropped and the inbox can no longer send.
+            </li>
+            <li>
+              <code>acceptFrom</code> turns the inbox into an allow-list, so only the service you're signing up for can reach it — less spam, fewer injection attempts.
+            </li>
+            <li>Expired inboxes are removed within a minute. Agent keys can create temporary inboxes for themselves.</li>
+          </ul>
 
           {/* ------------------------------------------------------------- */}
           <H2 id="sending">
@@ -368,9 +410,15 @@ const message = await res.json() // full Message, status "sent"`
               { name: "text / html", type: "string", description: "Provide at least one (or an attachment). If only html is given, a text part is generated." },
               { name: "attachments", type: "{ filename, contentType?, content }[]", description: "content is base64. Total message size is capped per plan." },
               { name: "headers", type: "Record<string, string>", description: "Extra headers to add." },
-              { name: "labels", type: "string[]", description: "Labels to store on the sent message." }
+              { name: "labels", type: "string[]", description: "Labels to store on the sent message." },
+              { name: "sendAt", type: "ISO timestamp", description: <>Send later, up to 30 days ahead. The message is returned with status <code>scheduled</code>.</> },
+              { name: "idempotencyKey", type: "string", description: <>Safe-retry key (also accepted as an <code>Idempotency-Key</code> header). Repeating a request with the same key returns the original message instead of sending again.</> }
             ]}
           />
+          <Callout tone="tip" title="Always send an Idempotency-Key">
+            Agents retry. If a request times out after AGMX accepted it, retrying without a key can send the email twice. Generate a key per logical send (a UUID is fine) and
+            reuse it on retries. The official SDKs do this for you.
+          </Callout>
           <ul>
             <li>
               <strong>Quota:</strong> every recipient (to + cc + bcc) counts as one send against daily and monthly limits. A failed delivery is refunded.
@@ -382,7 +430,35 @@ const message = await res.json() // full Message, status "sent"`
               <strong>Suppression:</strong> addresses that hard-bounced or complained are refused with <code>InvalidRequest</code> to protect deliverability.
             </li>
             <li>At most 50 recipients per message.</li>
+            <li>
+              <strong>Approvals:</strong> if the sending agent's <a href="#approvals">send policy</a> requires review, the message comes back with status{" "}
+              <code>pending_approval</code> and is sent once a human approves it.
+            </li>
           </ul>
+
+          {/* ------------------------------------------------------------- */}
+          <H2 id="drafts">
+            Drafts & scheduling
+          </H2>
+          <p>
+            Messages move through these statuses: <code>draft</code> → <code>scheduled</code> or <code>pending_approval</code> → <code>sending</code> → <code>sent</code> →{" "}
+            <code>delivered</code> / <code>bounced</code> / <code>complained</code> (or <code>failed</code> / <code>rejected</code>). Drafts, scheduled and held mail don't
+            appear in threads until they're sent.
+          </p>
+          <DocTable
+            head={["Endpoint", "What it does"]}
+            rows={[
+              [<code key="e">POST /drafts</code>, <>Create a draft. Everything is optional; pass <code>replyToMessageId</code> (and <code>replyAll</code>) to start a threaded reply.</>],
+              [<code key="e">PATCH /drafts/{"{id}"}</code>, <>Update fields. Passing <code>attachments</code> replaces them all.</>],
+              [<code key="e">POST /drafts/{"{id}"}/send</code>, <>Send now, or pass <code>{'{"sendAt": "…"}'}</code> to schedule. Subject to the send policy.</>],
+              [<code key="e">GET /drafts</code>, "List drafts (same shape as GET /messages)."],
+              [<code key="e">DELETE /drafts/{"{id}"}</code>, "Delete a draft, scheduled or rejected message."],
+              [<code key="e">POST /messages/{"{id}"}/cancel</code>, "Move a scheduled message back to drafts."]
+            ]}
+          />
+          <p>
+            Scheduled mail is released within about 10 seconds of <code>sendAt</code>. Quota is checked when the message actually sends, not when it's scheduled.
+          </p>
 
           {/* ------------------------------------------------------------- */}
           <H2 id="receiving">
@@ -392,7 +468,7 @@ const message = await res.json() // full Message, status "sent"`
           <Params
             title="Query"
             params={[
-              { name: "folder", type: '"inbox" | "sent" | "starred" | "archived" | "spam" | "all"', description: "inbox = received, not archived, not spam." },
+              { name: "folder", type: '"inbox" | "sent" | "starred" | "archived" | "spam" | "drafts" | "scheduled" | "pending" | "all"', description: <>inbox = received, not archived, not spam. <code>pending</code> lists held and rejected mail.</> },
               { name: "inboxId / agentId / threadId", type: "string", description: "Narrow to one inbox, agent or conversation." },
               { name: "direction", type: '"inbound" | "outbound"', description: "Filter by direction." },
               { name: "unread", type: '"true" | "false"', description: "Only unread or read messages." },
@@ -406,26 +482,44 @@ const message = await res.json() // full Message, status "sent"`
             verdicts and attachments — with:
           </p>
           <Endpoint method="GET" path="/api/v1/messages/{messageId}?markRead=true" />
-          <h3>Extracted codes and links</h3>
-          <p>Every inbound message is scanned for one-time codes and actionable links, so agents don't need to parse HTML:</p>
+          <h3>Extracted data</h3>
+          <p>Every inbound message is scanned so agents don't need to parse HTML. Extraction only looks at visible content, so hidden text can't plant fake codes or links.</p>
           <CodeBlock
             lang="json"
             code={`"extracted": {
   "codes": ["482913"],
   "links": [
     { "url": "https://github.com/sessions/verified-device?token=…", "text": "Verify device", "kind": "verify" },
-    { "url": "https://github.com/settings/emails", "text": null, "kind": "unsubscribe" }
-  ]
+    { "url": "https://www.ups.com/track?tracknum=1Z999AA10123456784", "text": "Track package", "kind": "tracking" }
+  ],
+  "events": [
+    { "title": "Design review", "start": "2026-11-05T20:00:00.000Z", "end": "2026-11-05T21:00:00.000Z",
+      "allDay": false, "location": "Zoom", "organizer": "ada@example.com", "method": "REQUEST", "uid": "…", "url": null }
+  ],
+  "receipt": { "merchant": "Acme Cloud", "total": 49, "currency": "USD", "orderNumber": "2041-8812" },
+  "tracking": [{ "carrier": "ups", "number": "1Z999AA10123456784", "url": "https://www.ups.com/track?…" }]
 }`}
           />
-          <p>
-            Codes are ranked by how likely they are to be the one you want (near words like “code” or “verification”). Links are sorted by kind: <code>verify</code>,{" "}
-            <code>login</code>, <code>reset</code>, <code>other</code>, then <code>unsubscribe</code>.
-          </p>
+          <ul>
+            <li>
+              <strong>codes</strong> are ranked by how likely they are to be the one you want (near words like “code” or “verification”).
+            </li>
+            <li>
+              <strong>links</strong> are sorted by kind: <code>verify</code>, <code>login</code>, <code>reset</code>, <code>tracking</code>, <code>other</code>, then{" "}
+              <code>unsubscribe</code>.
+            </li>
+            <li>
+              <strong>events</strong> come from calendar invites (<code>text/calendar</code> parts or <code>.ics</code> attachments), with time zones converted to UTC.
+            </li>
+            <li>
+              <strong>receipt</strong> is filled for receipts, invoices and order confirmations; <strong>tracking</strong> lists UPS, FedEx, USPS and DHL numbers.
+            </li>
+          </ul>
           <h3>Attachments</h3>
           <p>
-            Each attachment in a full message has a <code>downloadUrl</code> (<code>GET /messages/{"{id}"}/attachments/{"{attachmentId}"}</code>) that returns the raw bytes with
-            the original content type. Use the same bearer key.
+            Each attachment in a full message has a <code>downloadUrl</code> (<code>GET /messages/{"{id}"}/attachments/{"{attachmentId}"}</code>) for the raw bytes — use the same
+            bearer key (in production it redirects to a short-lived signed URL). Text from PDFs and plain-text, CSV, JSON and XML attachments is included as{" "}
+            <code>extractedText</code> (up to 20,000 characters), so agents can read them without downloading anything.
           </p>
 
           {/* ------------------------------------------------------------- */}
@@ -495,6 +589,106 @@ const code = message.extracted.codes[0]`}
           </p>
 
           {/* ------------------------------------------------------------- */}
+          <H2 id="rules">
+            Sender rules
+          </H2>
+          <p>Rules filter an inbox before mail is stored. They're evaluated in order:</p>
+          <DocTable
+            head={["Action", "Effect", "target"]}
+            rows={[
+              [<code key="a">allow</code>, "If an inbox has any allow rules, only matching senders get through — everything else is dropped.", "—"],
+              [<code key="a">block</code>, "Drop matching mail. The first matching allow/block rule wins.", "—"],
+              [<code key="a">label</code>, "Add a label to matching mail.", "label name"],
+              [<code key="a">forward</code>, "Send a copy of matching mail to another address (counts as a send).", "email address"],
+              [<code key="a">webhook</code>, "POST a message.received event for matching mail to a URL, in addition to the agent's webhook.", "https URL"]
+            ]}
+          />
+          <p>
+            Match on <code>sender</code> (a full address), <code>domain</code> (the sender's domain or any subdomain of it) or <code>subject</code> (contains, case-insensitive).
+          </p>
+          <Endpoint method="POST" path="/api/v1/inboxes/{inboxId}/rules" />
+          <CodeBlock lang="json" code={`{ "field": "domain", "value": "github.com", "action": "allow" }`} />
+          <p>
+            Also <code>GET /inboxes/{"{id}"}/rules</code>, <code>PATCH /rules/{"{ruleId}"}</code> (including <code>enabled</code> and <code>position</code>) and{" "}
+            <code>DELETE /rules/{"{ruleId}"}</code>. Dropped mail isn't stored and doesn't count as received.
+          </p>
+          <Callout tone="warn" title="Forward and webhook rules are human-only">
+            Agent keys can create <code>allow</code>, <code>block</code> and <code>label</code> rules for their own inboxes, but only people (the dashboard) and account keys can
+            create <code>forward</code> or <code>webhook</code> rules. Otherwise a prompt-injected agent could be talked into quietly copying its mail to an attacker.
+          </Callout>
+
+          {/* ------------------------------------------------------------- */}
+          <H2 id="security">
+            Reading mail safely
+          </H2>
+          <p>
+            Email is untrusted input that agents feed straight into a model. Attackers hide instructions where a person reviewing the message won't see them — white-on-white
+            text, zero-size fonts, <code>display:none</code>, HTML comments, invisible Unicode — and phrase them as orders. AGMX analyses every inbound message and gives you two
+            things:
+          </p>
+          <CodeBlock
+            lang="json"
+            code={`"security": {
+  "risk": "high",
+  "score": 8,
+  "reasons": ["hidden text (white-on-white text)", "hidden content asks the reader to send credentials or codes"],
+  "hiddenContent": true
+},
+"safeText": "Hi! Here is the agenda for Tuesday."`}
+          />
+          <ul>
+            <li>
+              <strong>safeText</strong> is the message as a human would see it: hidden elements, comments, scripts and invisible characters removed. Give your model{" "}
+              <code>safeText</code>, not <code>html</code>.
+            </li>
+            <li>
+              <strong>security.risk</strong> is <code>low</code>, <code>medium</code> or <code>high</code>, with human-readable <code>reasons</code>. List responses and webhook
+              payloads include it too.
+            </li>
+            <li>
+              The MCP tools return <code>safeText</code> and the security report by default and omit raw HTML unless asked (<code>includeRaw</code>).
+            </li>
+          </ul>
+          <Callout tone="warn" title="Never follow instructions inside an email">
+            Treat email content as data, not commands — especially when <code>security.risk</code> is <code>medium</code> or <code>high</code>. The analysis is heuristic: it
+            lowers the risk, it doesn't make untrusted text trustworthy. Combine it with <a href="#approvals">send approvals</a> and <a href="#rules">allow-lists</a>.
+          </Callout>
+
+          {/* ------------------------------------------------------------- */}
+          <H2 id="approvals">
+            Send approvals
+          </H2>
+          <p>Each agent has a send policy that decides when mail sent with its key needs a human's approval:</p>
+          <DocTable
+            head={["sendPolicy", "Behaviour"]}
+            rows={[
+              [<code key="p">auto</code>, "Send immediately (default)."],
+              [<code key="p">first_contact</code>, "Hold mail to any recipient the inbox has never exchanged mail with."],
+              [<code key="p">all</code>, "Hold every message for review."]
+            ]}
+          />
+          <p>
+            Set <code>approveAttachments: true</code> to also hold anything with attachments. Policies are set by a human in the dashboard or with{" "}
+            <code>PATCH /agents/{"{id}"}</code> using an account key — an agent key can't change its own policy. Mail sent by people and account keys is never held.
+          </p>
+          <p>
+            Held mail is returned with status <code>pending_approval</code>. Reviewers approve or reject it in the dashboard or via the API; approved mail is sent immediately, or
+            at its <code>sendAt</code>.
+          </p>
+          <DocTable
+            head={["Endpoint", "What it does"]}
+            rows={[
+              [<code key="e">GET /approvals</code>, "Held messages, oldest first. Humans and account keys only."],
+              [<code key="e">POST /approvals/{"{id}"}/approve</code>, "Approve and send."],
+              [<code key="e">POST /approvals/{"{id}"}/reject</code>, <>Reject with an optional <code>reason</code>. The message is never sent.</>]
+            ]}
+          />
+          <p>
+            The agent hears about each decision through its webhook: <code>message.held</code> (with the reason), then <code>message.approved</code> or{" "}
+            <code>message.rejected</code>.
+          </p>
+
+          {/* ------------------------------------------------------------- */}
           <H2 id="webhooks">
             Webhooks
           </H2>
@@ -509,6 +703,9 @@ const code = message.extracted.codes[0]`}
               [<code key="e">message.delivered</code>, "The recipient's server accepted it (requires an SES configuration set)."],
               [<code key="e">message.bounced</code>, "Delivery failed. Permanent bounces suppress the address."],
               [<code key="e">message.complained</code>, "The recipient marked it as spam. The address is suppressed."],
+              [<code key="e">message.held</code>, "A message is waiting for approval under the agent's send policy. Includes the reason."],
+              [<code key="e">message.approved</code>, "A human approved a held message (it's sent right after, or at sendAt)."],
+              [<code key="e">message.rejected</code>, "A human rejected a held message. Includes the reason, if given."],
               [<code key="e">webhook.test</code>, "Sent from the dashboard or POST /agents/{id}/webhook-test."]
             ]}
           />
@@ -587,7 +784,8 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
   "mcpServers": {
     "agmx": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "${origin}/mcp", "--header", "Authorization: Bearer agmx_agt_…"]
+      "args": ["-y", "agmx-cli", "mcp"],
+      "env": { "AGMX_API_KEY": "agmx_agt_…", "AGMX_BASE_URL": "${origin}" }
     }
   }
 }`
@@ -599,18 +797,92 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
             rows={[
               [<code key="t">whoami</code>, "Account, plan limits, usage and the key's agent."],
               [<code key="t">list_inboxes</code>, "Inboxes the key can use, with unread counts."],
-              [<code key="t">create_inbox</code>, "Claim a new address."],
+              [<code key="t">create_inbox</code>, "Claim a new address — permanent, or temporary with expiresIn, maxMessages and acceptFrom."],
               [<code key="t">list_messages</code>, "List and search mail (folder, unread, query, cursor)."],
-              [<code key="t">get_message</code>, "Read one email in full; marks it read by default."],
+              [<code key="t">get_message</code>, "Read one email: safeText, security report, attachments and extracted data. Marks it read by default."],
               [<code key="t">wait_for_email</code>, "Block up to 60s for the next email — returns extracted codes and links."],
-              [<code key="t">send_email</code>, "Send a new email, with optional attachments."],
+              [<code key="t">send_email</code>, "Send now or at sendAt, with optional attachments and an idempotencyKey."],
               [<code key="t">reply_to_email</code>, "Reply in-thread, optionally to all."],
               [<code key="t">forward_email</code>, "Forward with attachments."],
+              [<code key="t">create_draft / send_draft</code>, "Save a draft (or threaded reply draft) and send or schedule it later."],
+              [<code key="t">cancel_scheduled</code>, "Move a scheduled message back to drafts."],
+              [<code key="t">add_inbox_rule / list_inbox_rules</code>, "Manage allow, block and label rules on the agent's inboxes."],
               [<code key="t">update_message</code>, "Read, star, archive, spam and labels."],
               [<code key="t">delete_message</code>, "Permanently delete."],
               [<code key="t">list_threads / get_thread</code>, "Browse and read whole conversations."]
             ]}
           />
+
+          {/* ------------------------------------------------------------- */}
+          <H2 id="sdks">
+            SDKs & CLI
+          </H2>
+          <p>
+            Official clients live in the <a href="https://github.com/nearbycoder/agmx.io/tree/main/packages">packages/</a> directory of the repository. The TypeScript SDK's types are
+            generated from the OpenAPI spec, and every client sends an <code>Idempotency-Key</code> automatically.
+          </p>
+          <CodeTabs
+            tabs={[
+              {
+                label: "TypeScript",
+                lang: "ts",
+                code: `// npm install agmx
+import { Agmx, AgmxError } from "agmx"
+
+const agmx = new Agmx({ apiKey: process.env.AGMX_API_KEY!, baseUrl: "${origin}" })
+
+const inbox = await agmx.inboxes.create({ expiresIn: 3600, maxMessages: 1, acceptFrom: ["github.com"] })
+// …trigger the sign-up with inbox.address
+const result = await agmx.waitForCode({ inboxId: inbox.id, timeout: 60 })
+
+const sent = await agmx.messages.send({ to: "ada@example.com", subject: "Hi", text: "Hello" })
+if (sent.status === "pending_approval") console.log("Waiting for a human to approve")`
+              },
+              {
+                label: "Python",
+                lang: "py",
+                code: `# pip install agmx
+from agmx import Agmx
+
+agmx = Agmx("agmx_agt_…", base_url="${origin}")
+inbox = agmx.create_inbox(expires_in=3600, max_messages=1, accept_from=["github.com"])
+result = agmx.wait_for_code(inbox_id=inbox["id"], timeout=60)
+print(result["code"] if result else "timed out")`
+              },
+              {
+                label: "CLI",
+                lang: "bash",
+                code: `npm install -g agmx-cli
+
+agmx signup --name Scout --username scout --owner-email you@example.com
+agmx inboxes create --temp 1h --max-messages 1 --accept-from github.com
+agmx wait --from github.com --code      # prints just the code
+agmx send --to ada@example.com --subject "Hi" --text "Hello"
+agmx mcp                                 # local stdio MCP server`
+              },
+              {
+                label: "Sign-up helper",
+                lang: "ts",
+                code: `import { Agmx } from "agmx"
+
+// No key needed: request an inbox and wait for your human to approve it.
+const { apiKey, inbox, client } = await Agmx.signup({
+  name: "Scout",
+  username: "scout",
+  ownerEmail: "you@example.com",
+  baseUrl: "${origin}",
+  onApprovalUrl: ({ approvalUrl, userCode }) => console.log(\`Approve at \${approvalUrl} (\${userCode})\`)
+})
+// Store apiKey securely — it is shown once.`
+              }
+            ]}
+          />
+          <Callout title="Until the packages are published">
+            Install from source: clone the repo, run <code>npm install &amp;&amp; npm run build</code> in <code>packages/sdk</code>, then{" "}
+            <code>npm install /path/to/agmx.io/packages/sdk</code> in your project. Python: <code>pip install ./packages/python</code>. CLI: run{" "}
+            <code>npm link</code> in <code>packages/sdk</code>, then <code>npm link agmx &amp;&amp; npm link</code> in <code>packages/cli</code> to get the{" "}
+            <code>agmx</code> command.
+          </Callout>
 
           {/* ------------------------------------------------------------- */}
           <H2 id="domains">
@@ -658,7 +930,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
               ["402", <code key="c">QuotaExceeded</code>, <>Plan limit reached. <code>limit</code> is one of agents, inboxes_per_agent, monthly_sends, daily_sends, custom_domains, message_size.</>],
               ["403", <code key="c">Forbidden</code>, "Not allowed with this key type, or the inbox is paused."],
               ["404", <code key="c">NotFound</code>, <>Doesn't exist or isn't visible to this key. Includes <code>resource</code>.</>],
-              ["409", <code key="c">Conflict</code>, "Already exists, e.g. a taken username."],
+              ["409", <code key="c">Conflict</code>, "Already exists (a taken username), or the message is in the wrong state — e.g. approving mail that was already decided."],
               ["422", <code key="c">InvalidRequest</code>, <>Validation failed; <code>field</code> names the culprit when known.</>],
               ["502", <code key="c">DeliveryFailed</code>, "Amazon SES rejected or failed the request."]
             ]}
@@ -675,6 +947,9 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
           <ul>
             <li>Agents per account, inboxes per agent, custom domains.</li>
             <li>Sends per day and per month (counted per recipient).</li>
+            <li>
+              Received messages per month and maximum inbound size — mail over either is dropped and counted in <code>usage.droppedThisMonth</code>.
+            </li>
             <li>Maximum message size including attachments, and message retention.</li>
           </ul>
 

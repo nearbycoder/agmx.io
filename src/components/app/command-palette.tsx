@@ -1,7 +1,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { useNavigate } from "@tanstack/react-router"
 import { Command } from "cmdk"
-import { Bot, BookOpen, Copy, Globe, Inbox, KeyRound, LayoutGrid, Moon, PenSquare, Plus, Settings, Shield, Sun } from "lucide-react"
+import { Bot, BookOpen, Copy, Globe, Inbox, KeyRound, LayoutGrid, Moon, PenSquare, Plus, Settings, Shield, Sun, ShieldCheck } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { AgentAvatar } from "~/components/brand"
 import { copyText } from "~/components/ui/misc"
@@ -77,6 +77,7 @@ export function CommandPalette({ open, onOpenChange, isAdmin }: { open: boolean;
               <Command.Group heading="Go to">
                 <Item icon={<LayoutGrid />} onSelect={() => run(() => navigate({ to: "/app" }))}>Overview</Item>
                 <Item icon={<Inbox />} onSelect={() => run(() => navigate({ to: "/app/mail" }))}>Mail</Item>
+                <Item icon={<ShieldCheck />} value="review approvals held messages" onSelect={() => run(() => navigate({ to: "/app/approvals" }))}>Review approvals</Item>
                 <Item icon={<Bot />} onSelect={() => run(() => navigate({ to: "/app/agents" }))}>Agents</Item>
                 <Item icon={<Globe />} onSelect={() => run(() => navigate({ to: "/app/domains" }))}>Domains</Item>
                 <Item icon={<KeyRound />} onSelect={() => run(() => navigate({ to: "/app/keys" }))}>API keys</Item>

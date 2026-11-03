@@ -430,7 +430,8 @@ export class Mail extends Context.Service<Mail, {
                 subject: parsed.subject,
                 text: parsed.text,
                 html: parsed.html,
-                snippet: makeSnippet(parsed.text, parsed.html),
+                // Built from visible text so hidden instructions never reach list previews or webhooks.
+                snippet: makeSnippet(scan.safeText, null),
                 headers: parsed.headers,
                 extracted,
                 security: scan.security,
@@ -628,6 +629,11 @@ export class Mail extends Context.Service<Mail, {
           return all
         })
 
+      const inactiveMessage = (inbox: InboxRow) =>
+        inbox.status === "closed"
+          ? `${inbox.address} is a temporary inbox that reached its message limit, so it's closed.`
+          : `${inbox.address} (or its agent) is paused. Resume it before sending.`
+
       const loadAgentFor = (inbox: InboxRow) =>
         db.use((d) => d.select().from(agents).where(eq(agents.id, inbox.agentId)).limit(1)).pipe(Effect.map((rows) => rows[0]!))
 
@@ -658,7 +664,7 @@ export class Mail extends Context.Service<Mail, {
         if (!canAccessAgent(principal, inbox.agentId)) return yield* new NotFound({ message: "Inbox not found.", resource: "inbox" })
         const agent = yield* loadAgentFor(inbox)
         if (mode === "send" && (inbox.status !== "active" || agent.status !== "active"))
-          return yield* new Forbidden({ message: `${inbox.address} is paused. Resume it before sending.` })
+          return yield* new Forbidden({ message: inactiveMessage(inbox) })
 
         const recipients = yield* parseRecipients(input)
         const files = yield* decodeFiles(input.attachments)
@@ -970,7 +976,13 @@ export class Mail extends Context.Service<Mail, {
         list: Effect.fn("Mail.list")(function* (principal, filters) {
           const limit = Math.min(Math.max(filters.limit ?? 25, 1), 100)
           const conditions: Array<SQL | undefined> = [scopeCondition(principal)]
-          if (filters.inboxId) conditions.push(eq(messages.inboxId, filters.inboxId))
+          if (filters.inboxId) {
+            // Accept an address as well as an id.
+            const inboxId = filters.inboxId.includes("@")
+              ? ((yield* agentsService.requireInbox(principal, filters.inboxId).pipe(Effect.option)).pipe((o) => (o._tag === "Some" ? o.value.id : "none")))
+              : filters.inboxId
+            conditions.push(eq(messages.inboxId, inboxId))
+          }
           if (filters.agentId) conditions.push(inArray(messages.inboxId, db_inboxIdsForAgent(filters.agentId)))
           if (filters.threadId) conditions.push(eq(messages.threadId, filters.threadId))
           if (filters.direction) conditions.push(eq(messages.direction, filters.direction))
@@ -1000,8 +1012,9 @@ export class Mail extends Context.Service<Mail, {
               conditions.push(eq(messages.isSpam, true))
               break
           }
-          if (!filters.folder || filters.folder === "all" || ["starred", "archived", "spam", "inbox"].includes(filters.folder))
-            conditions.push(notInArray(messages.status, ["draft"]))
+          // Drafts, scheduled, held and rejected mail only appear in their own folders.
+          if (!filters.folder || ["all", "starred", "archived", "spam", "inbox"].includes(filters.folder))
+            conditions.push(notInArray(messages.status, [...UNSENT_STATUSES]))
           if (filters.unread === "true") conditions.push(eq(messages.isRead, false))
           if (filters.unread === "false") conditions.push(eq(messages.isRead, true))
           if (filters.since) {
@@ -1212,7 +1225,7 @@ export class Mail extends Context.Service<Mail, {
           if (!inbox) return yield* new NotFound({ message: "Inbox not found.", resource: "inbox" })
           const agent = yield* loadAgentFor(inbox)
           if (inbox.status !== "active" || agent.status !== "active")
-            return yield* new Forbidden({ message: `${inbox.address} is paused. Resume it before sending.` })
+            return yield* new Forbidden({ message: inactiveMessage(inbox) })
           const [att] = yield* db.use((d) => d.select({ n: count() }).from(attachments).where(eq(attachments.messageId, draft.id)))
           const all = yield* assertSendable(
             { to: draft.to.map((a) => ({ name: a.name ?? null, address: a.address })), cc: [], bcc: [...draft.cc, ...draft.bcc].map((a) => ({ name: a.name ?? null, address: a.address })), replyTo: [] },

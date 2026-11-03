@@ -13,12 +13,17 @@
 
 ## What it does
 
-- **Instant inboxes.** `POST /api/v1/agents` → `scout@agmx.io` is live. Plus-addressing (`scout+github@…`) becomes a label.
+- **Instant inboxes.** `POST /api/v1/agents` → `scout@bot.agmx.io` is live. Plus-addressing (`scout+github@…`) becomes a label. Temporary inboxes (`expiresIn`, `maxMessages`, `acceptFrom`) delete themselves after a one-off sign-up.
 - **Agents sign themselves up.** `POST /api/v1/signup` needs no credentials. A human approves the request in the dashboard, and the agent gets its own scoped API key by polling. Point any agent at `/skill.md` and it can do this by itself.
-- **Built for verification flows.** Every inbound email is parsed and enriched with `extracted.codes` (OTPs) and `extracted.links` (verify / login / reset / unsubscribe). `GET /api/v1/messages/wait` long-polls until the next email arrives.
+- **Prompt-injection protection.** Every inbound email gets a `security` report and a `safeText` with hidden HTML/CSS text, comments and invisible Unicode removed. Agents read what a human would see; MCP tools return the safe view by default.
+- **Human approval for sends.** Per-agent send policies (`auto`, `first_contact`, `all`, plus attachments) hold mail for review in an approval queue. Agents can't change their own policy.
+- **Built for verification flows.** Every inbound email is enriched with `extracted.codes` (OTPs), classified `extracted.links`, calendar `events`, `receipt` totals, `tracking` numbers and text from PDF attachments, all taken from visible content only. `GET /api/v1/messages/wait` long-polls until the next email arrives.
+- **Drafts, scheduling and safe retries.** Drafts API, `sendAt` scheduling, and `Idempotency-Key` support so retried sends never go out twice.
+- **Sender rules.** Per-inbox allow-lists, blocks, labels, forwards and extra webhooks, applied before mail is stored (forward/webhook rules are human-only).
 - **Full mail client for humans.** Three-pane, keyboard-driven inbox with threads, compose, reply/forward, attachments, search, live updates and dark mode.
-- **MCP server** at `/mcp` (Streamable HTTP) with 13 tools: `wait_for_email`, `send_email`, `reply_to_email` and more.
-- **Webhooks** for `message.received`, `message.sent`, `message.delivered`, `message.bounced` and `message.complained`. Deliveries are HMAC-signed and retried with backoff.
+- **MCP server** at `/mcp` (Streamable HTTP) with 18 tools: `wait_for_email`, `send_email`, `reply_to_email`, drafts, rules and more.
+- **SDKs and CLI.** TypeScript (`agmx`, types generated from the OpenAPI spec), Python (`agmx`) and the `agmx` CLI with a stdio MCP bridge, in [`packages/`](packages).
+- **Webhooks** for `message.received`, `message.sent`, `message.delivered`, `message.bounced`, `message.complained`, `message.held`, `message.approved` and `message.rejected`. Deliveries are HMAC-signed and retried with backoff.
 - **Custom domains.** SES identity with DKIM. Shows the exact DNS records to publish and verifies them.
 - **Plans & quotas.** Agents, inboxes per agent, daily and monthly sends, monthly receives, inbound and outbound message size, custom domains, and retention. Mail over the receive limits is dropped and counted. Defined in [`src/shared/plans.ts`](src/shared/plans.ts).
 - **Cheap at scale.** Attachments live in S3-compatible object storage (S3, R2, MinIO) and download through signed URLs; raw inbound mail is deleted from the intake bucket the moment it's stored. Postgres holds only metadata and text.
@@ -132,6 +137,22 @@ curl -X POST https://agmx.io/api/v1/messages -H "Authorization: Bearer $AGMX_KEY
 
 Full docs are at `/docs`, the interactive API reference at `/api/v1/reference`, and the OpenAPI spec at `/api/v1/openapi.json`.
 
+### SDKs and CLI
+
+```ts
+import { Agmx } from "agmx"                       // npm install agmx
+const agmx = new Agmx({ apiKey: process.env.AGMX_API_KEY! })
+const inbox = await agmx.inboxes.create({ expiresIn: 3600, acceptFrom: ["github.com"] })
+const result = await agmx.waitForCode({ inboxId: inbox.id, timeout: 60 })
+```
+
+```sh
+npx agmx-cli wait --from github.com --code         # CLI; `agmx mcp` runs a local stdio MCP bridge
+pip install agmx                                   # Python SDK
+```
+
+The packages aren't on npm/PyPI yet — build them from [`packages/`](packages) (see each README). After API changes, regenerate the SDK types with `bun run sdk:types`.
+
 ## Project layout
 
 ```
@@ -149,6 +170,7 @@ src/
   components/      UI kit, app shell, mail client, dashboard, marketing
 drizzle/           SQL migrations
 tests/             Vitest unit + end-to-end API tests
+packages/          TypeScript SDK, CLI + MCP bridge, Python SDK
 ```
 
 ## License

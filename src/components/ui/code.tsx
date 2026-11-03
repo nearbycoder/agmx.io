@@ -26,8 +26,9 @@ export const highlight = (code: string, lang: Lang): string => {
             [/\$[A-Z_]+/g, "tok-n"]
           ]
         : [
+            // Strings first, so "https://…" inside a string is never mistaken for a comment.
+            [/`(?:[^`\\]|\\.)*`|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, "tok-s"],
             [/\/\/[^\n]*|#[^\n]*/g, "tok-c"],
-            [/`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, "tok-s"],
             [/\b(const|let|await|async|import|from|export|return|function|if|else|for|of|new|def|print|with|as|while|true|false|None|True|False)\b/g, "tok-k"],
             [/\b\d+(\.\d+)?\b/g, "tok-n"],
             [/\b([a-zA-Z_]\w*)(?=\()/g, "tok-f"]

@@ -13,18 +13,21 @@ import { Button } from "~/components/ui/button"
 import { ConfirmDialog } from "~/components/ui/dialog"
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { EmptyState, Kbd } from "~/components/ui/misc"
-import { useAgents, useMessages, useThread } from "~/lib/queries"
+import { toast } from "sonner"
+import { useMailList } from "~/components/mail/queries"
+import { api, errorMessage } from "~/lib/api"
+import { useAgents, useThread } from "~/lib/queries"
 import { cn } from "~/lib/utils"
 
 export interface MailSearch {
   inbox?: string
-  folder?: "inbox" | "sent" | "starred" | "archived" | "spam" | "all"
+  folder?: "inbox" | "sent" | "drafts" | "scheduled" | "pending" | "starred" | "archived" | "spam" | "all"
   q?: string
   /** Selected thread id. */
   t?: string
 }
 
-const FOLDER_IDS = ["inbox", "sent", "starred", "archived", "spam", "all"] as const
+const FOLDER_IDS = ["inbox", "sent", "drafts", "scheduled", "pending", "starred", "archived", "spam", "all"] as const
 
 export const Route = createFileRoute("/app/mail")({
   validateSearch: (search: Record<string, unknown>): MailSearch => ({
@@ -44,6 +47,9 @@ const EMPTY_COPY: Record<FolderId, { title: string; description: string }> = {
   inbox: { title: "Inbox zero", description: "Nothing waiting. New mail for your agents shows up here instantly." },
   starred: { title: "No starred mail", description: "Star important messages with S to find them here." },
   sent: { title: "Nothing sent yet", description: "Messages your agents send — via API, MCP or the composer — land here." },
+  drafts: { title: "No drafts", description: "Unsent messages saved from the composer or the drafts API wait here." },
+  scheduled: { title: "Nothing scheduled", description: "Messages set to send later appear here until they go out. Cancel one to move it back to Drafts." },
+  pending: { title: "Nothing awaiting approval", description: "When an agent's send policy holds a message for a human to review, it shows up here." },
   archived: { title: "Archive is empty", description: "Archived messages are kept here, out of the inbox." },
   spam: { title: "No spam", description: "Mail flagged as spam or carrying a virus — automatically or by you — lands here." },
   all: { title: "No mail yet", description: "Every message across folders shows up here." }
@@ -65,7 +71,7 @@ function MailPage() {
   const searchRef = useRef<HTMLInputElement>(null)
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
 
-  const messages = useMessages({ inboxId: search.inbox, folder, q: search.q, unread: unreadOnly ? "true" : undefined })
+  const messages = useMailList({ inboxId: search.inbox, folder, q: search.q, unread: unreadOnly ? "true" : undefined })
   const { data: thread } = useThread(search.t)
 
   const inboxMap = useMemo(() => {
@@ -134,6 +140,32 @@ function MailPage() {
     [compose, inboxMap]
   )
 
+  /** Load a saved draft into the composer. */
+  const openDraft = useCallback(
+    async (messageId: string) => {
+      try {
+        const m = await api((c) => c.messages.get({ params: { messageId }, query: {} }))
+        const join = (list: ReadonlyArray<{ name?: string | null; address: string }>) => list.map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(", ")
+        compose.open({
+          draftId: m.id,
+          from: m.from.address,
+          to: join(m.to),
+          cc: join(m.cc) || undefined,
+          bcc: join(m.bcc) || undefined,
+          subject: m.subject,
+          text: m.text ?? "",
+          attachmentNames: m.attachments.map((a) => a.filename)
+        })
+      } catch (e) {
+        toast.error(errorMessage(e))
+      }
+    },
+    [compose]
+  )
+
+  /** Rows open the reader, except drafts, which open the composer. */
+  const openRow = useCallback((m: MessageSummaryT) => (m.status === "draft" ? void openDraft(m.id) : openThread(m.threadId)), [openDraft, openThread])
+
   /** The messages keyboard actions apply to: the whole open thread, or the focused row. */
   const targetIds = useCallback((): ReadonlyArray<string> => {
     if (search.t && thread && thread.id === search.t) return thread.messages.map((m) => m.id)
@@ -176,7 +208,7 @@ function MailPage() {
         case "Enter":
           if (focused) {
             e.preventDefault()
-            openThread(focused.threadId)
+            openRow(focused)
           }
           return
         case "Escape":
@@ -221,7 +253,7 @@ function MailPage() {
         case "a":
         case "f": {
           const m = targetMessage()
-          if (!m) return
+          if (!m || ["draft", "scheduled", "pending_approval", "rejected"].includes(m.status)) return
           e.preventDefault()
           openReply(m, e.key === "r" ? "reply" : e.key === "a" ? "replyAll" : "forward")
           return
@@ -237,7 +269,7 @@ function MailPage() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [cursor, rows, focused, search.t, folder, actions, openThread, openReply, targetIds, targetMessage, advanceAfterRemoval])
+  }, [cursor, rows, focused, search.t, folder, actions, openThread, openRow, openReply, targetIds, targetMessage, advanceAfterRemoval])
 
   const folderMeta = FOLDERS.find((f) => f.id === folder)!
 
@@ -386,7 +418,7 @@ function MailPage() {
                   showInbox={!search.inbox && inboxMap.size > 1}
                   onOpen={() => {
                     setCursor(i)
-                    openThread(m.threadId)
+                    openRow(m)
                   }}
                   onStar={() => actions.update([m.id], { isStarred: !m.isStarred })}
                 />
@@ -410,6 +442,7 @@ function MailPage() {
             onReply={openReply}
             onDeleted={advanceAfterRemoval}
             onArchived={advanceAfterRemoval}
+            onEditDraft={(m) => void openDraft(m.id)}
           />
         ) : (
           <NothingSelected count={rows.length} onHelp={() => setHelpOpen(true)} />

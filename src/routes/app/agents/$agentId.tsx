@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import {
   ArrowLeft,
   Check,
+  Filter,
   Inbox as InboxIcon,
   MoreHorizontal,
   Pause,
@@ -24,13 +25,16 @@ import { FailureNote, NativeSelect, Notice, origin, SecretField, toastFailure } 
 import { Panel, PanelEmpty, Section } from "~/components/dashboard/section"
 import { connectSnippets } from "~/components/dashboard/connect"
 import { CreateKeyDialog } from "~/components/dashboard/create-key-dialog"
+import { InboxStatusBadge } from "~/components/dashboard/inbox-badges"
+import { InboxRulesDialog, useRuleCount } from "~/components/dashboard/inbox-rules-dialog"
+import { SendingSection } from "~/components/dashboard/sending-section"
 import { usernameProblem } from "~/components/dashboard/username-hint"
 import { Button } from "~/components/ui/button"
 import { CodeTabs } from "~/components/ui/code"
 import { ConfirmDialog, Dialog, DialogContent } from "~/components/ui/dialog"
 import { AddonInput, Field, Input, Textarea } from "~/components/ui/input"
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "~/components/ui/menu"
-import { CopyButton, EmptyState, Skeleton } from "~/components/ui/misc"
+import { CopyButton, EmptyState, Skeleton, Switch } from "~/components/ui/misc"
 import { Table, TBody, Td, Th, THead, Tr } from "~/components/ui/table"
 import { api, ApiFailure } from "~/lib/api"
 import { qk, useAgent, useApiKeys, useDeliveries, useDomains, useMe } from "~/lib/queries"
@@ -146,6 +150,7 @@ function AgentPage() {
       <div className="flex max-w-4xl flex-col gap-10">
         {paused ? <Notice tone="warn">This agent is paused. Incoming mail is dropped and sending is blocked until you resume it.</Notice> : null}
         <InboxesSection agentId={agent.id} agentName={agent.name} inboxes={agent.inboxes} />
+        <SendingSection agentId={agent.id} sendPolicy={agent.sendPolicy} approveAttachments={agent.approveAttachments} />
         <KeysSection agentId={agent.id} />
         <WebhookSection agentId={agent.id} webhookUrl={agent.webhookUrl} secret={agent.webhookSecret} />
         <ConnectSection />
@@ -231,6 +236,7 @@ function EditAgentDialog({
 function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agentName: string; inboxes: ReadonlyArray<InboxT> }) {
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<InboxT | null>(null)
+  const [rulesFor, setRulesFor] = useState<InboxT | null>(null)
   const invalidate = useInvalidateAgent(agentId)
   const compose = useCompose()
   const { data: me } = useMe()
@@ -254,11 +260,16 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
   })
 
   const limit = me?.plan.inboxesPerAgent ?? null
+  const permanent = inboxes.filter((i) => !i.temporary).length
 
   return (
     <Section
       title="Inboxes"
-      description={limit === null ? "Addresses this agent sends and receives from." : `${inboxes.length} of ${limit} allowed on your plan.`}
+      description={
+        limit === null
+          ? "Addresses this agent sends and receives from."
+          : `${permanent} of ${limit} allowed on your plan. Temporary inboxes don't count.`
+      }
       action={
         <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
           <Plus /> Add inbox
@@ -284,9 +295,9 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
             <div key={inbox.id} className="flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1">
-                  <code className={cn("truncate font-mono text-[13.5px]", inbox.status === "paused" && "text-muted")}>{inbox.address}</code>
+                  <code className={cn("truncate font-mono text-[13.5px]", inbox.status !== "active" && "text-muted")}>{inbox.address}</code>
                   <CopyButton value={inbox.address} size="xs" label="Address copied" />
-                  {inbox.status === "paused" ? <span className="ml-1 text-[12px] text-warn">Paused</span> : null}
+                  <InboxStatusBadge inbox={inbox} className="ml-1" />
                 </div>
                 <div className="mt-0.5 text-[12.5px] text-muted tabular-nums">
                   {inbox.displayName ? `${inbox.displayName} · ` : ""}
@@ -294,6 +305,8 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
                   {inbox.unreadCount ? <span className="text-ink-2"> · {inbox.unreadCount} unread</span> : null}
                   {" · "}
                   {inbox.lastMessageAt ? `last ${relativeTime(inbox.lastMessageAt)}` : "no mail yet"}
+                  {inbox.maxMessages !== null ? ` · stops after ${inbox.maxMessages.toLocaleString()}` : ""}
+                  <RuleCount inboxId={inbox.id} />
                 </div>
               </div>
               <Link to="/app/mail" search={{ inbox: inbox.id }} className="hidden sm:block">
@@ -313,6 +326,9 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
                   </DropdownItem>
                   <DropdownItem icon={<InboxIcon />} onSelect={() => (window.location.href = `/app/mail?inbox=${inbox.id}`)}>
                     Open in Mail
+                  </DropdownItem>
+                  <DropdownItem icon={<Filter />} onSelect={() => setRulesFor(inbox)}>
+                    Sender rules
                   </DropdownItem>
                   {me?.devTools ? (
                     <DropdownItem
@@ -336,12 +352,14 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
                     </DropdownItem>
                   ) : null}
                   <DropdownSeparator />
-                  <DropdownItem
-                    icon={inbox.status === "active" ? <Pause /> : <Play />}
-                    onSelect={() => update.mutate({ id: inbox.id, status: inbox.status === "active" ? "paused" : "active" })}
-                  >
-                    {inbox.status === "active" ? "Pause inbox" : "Resume inbox"}
-                  </DropdownItem>
+                  {inbox.status !== "closed" ? (
+                    <DropdownItem
+                      icon={inbox.status === "active" ? <Pause /> : <Play />}
+                      onSelect={() => update.mutate({ id: inbox.id, status: inbox.status === "active" ? "paused" : "active" })}
+                    >
+                      {inbox.status === "active" ? "Pause inbox" : "Resume inbox"}
+                    </DropdownItem>
+                  ) : null}
                   <DropdownItem icon={<Trash2 />} danger onSelect={() => setDeleting(inbox)}>
                     Delete inbox
                   </DropdownItem>
@@ -352,6 +370,7 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
         </Panel>
       )}
       <AddInboxDialog open={adding} onOpenChange={setAdding} agentId={agentId} />
+      <InboxRulesDialog inbox={rulesFor} onOpenChange={(o) => !o && setRulesFor(null)} />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -372,8 +391,18 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
   const [username, setUsername] = useState("")
   const [domain, setDomain] = useState("")
   const [displayName, setDisplayName] = useState("")
+  const [temporary, setTemporary] = useState(false)
+  const [lifetime, setLifetime] = useState("86400")
+  const [maxMessages, setMaxMessages] = useState("")
+  const [acceptFrom, setAcceptFrom] = useState("")
   const mailDomain = me?.mailDomain ?? "agmx.io"
   const verified = domains?.filter((d) => d.status === "verified") ?? []
+  const maxParsed = maxMessages.trim() ? Number(maxMessages) : undefined
+  const maxProblem = maxParsed !== undefined && (!Number.isInteger(maxParsed) || maxParsed < 1) ? "Enter a whole number of 1 or more." : undefined
+  const senders = acceptFrom
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
   const domainOptions = [...(me?.operatorDomain ? [me.operatorDomain] : []), ...verified.map((d) => d.name)]
   const problem = usernameProblem(username, (domain || mailDomain) === mailDomain)
   useEffect(() => {
@@ -381,6 +410,10 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
       setUsername("")
       setDomain("")
       setDisplayName("")
+      setTemporary(false)
+      setLifetime("86400")
+      setMaxMessages("")
+      setAcceptFrom("")
       mutation.reset()
     }
   }, [open])
@@ -388,12 +421,20 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
     mutationFn: () =>
       api((c) =>
         c.inboxes.create({
-          payload: { agentId, username: username.trim() || undefined, domain: domain || undefined, displayName: displayName.trim() || null }
+          payload: {
+            agentId,
+            username: username.trim() || undefined,
+            domain: domain || undefined,
+            displayName: displayName.trim() || null,
+            expiresIn: temporary ? Number(lifetime) : undefined,
+            maxMessages: maxParsed,
+            acceptFrom: senders.length ? senders : undefined
+          }
         })
       ),
     onSuccess: (inbox) => {
       invalidate()
-      toast.success(`${inbox.address} is ready`)
+      toast.success(`${inbox.address} is ready`, inbox.temporary ? { description: "It deletes itself, with its mail, when it expires." } : undefined)
       onOpenChange(false)
     }
   })
@@ -407,7 +448,7 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" form="add-inbox" loading={mutation.isPending} disabled={Boolean(problem)}>
+            <Button type="submit" form="add-inbox" loading={mutation.isPending} disabled={Boolean(problem || maxProblem)}>
               <Plus /> Create inbox
             </Button>
           </>
@@ -418,10 +459,15 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault()
-            if (!problem) mutation.mutate()
+            if (!problem && !maxProblem) mutation.mutate()
           }}
         >
-          <Field label="Address" htmlFor="inbox-username" error={problem} hint={username ? undefined : "Leave blank for a random friendly address."}>
+          <Field
+            label="Address"
+            htmlFor="inbox-username"
+            error={problem}
+            hint={username ? undefined : temporary ? "Leave blank for a random tmp- address." : "Leave blank for a random friendly address."}
+          >
             <div className="flex gap-2">
               <AddonInput
                 id="inbox-username"
@@ -449,11 +495,53 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
           <Field label="Display name" htmlFor="inbox-display" hint="Shown to recipients, e.g. “Scout from Acme”.">
             <Input id="inbox-display" placeholder="Optional" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </Field>
+          <div className="overflow-hidden rounded-xl border border-line">
+            <label htmlFor="inbox-temporary" className="flex cursor-pointer items-center justify-between gap-4 px-4 py-3">
+              <span className="min-w-0">
+                <span className="block text-[13.5px] font-medium">Temporary inbox</span>
+                <span className="mt-0.5 block text-[12.5px] text-muted">Deletes itself and its mail after a while. Good for one-off sign-ups.</span>
+              </span>
+              <Switch id="inbox-temporary" checked={temporary} onCheckedChange={setTemporary} />
+            </label>
+            {temporary ? (
+              <div className="grid animate-fade-in gap-3 border-t border-line bg-bg-subtle/40 p-4 sm:grid-cols-2">
+                <Field label="Delete after" htmlFor="inbox-lifetime">
+                  <NativeSelect id="inbox-lifetime" value={lifetime} onChange={setLifetime}>
+                    <option value="3600">1 hour</option>
+                    <option value="86400">1 day</option>
+                    <option value="604800">7 days</option>
+                  </NativeSelect>
+                </Field>
+                <Field label="Stop after" htmlFor="inbox-max" error={maxProblem}>
+                  <AddonInput
+                    id="inbox-max"
+                    inputMode="numeric"
+                    placeholder="No limit"
+                    value={maxMessages}
+                    onChange={(e) => setMaxMessages(e.target.value.replace(/[^0-9]/g, ""))}
+                    suffix="messages"
+                  />
+                </Field>
+              </div>
+            ) : null}
+          </div>
+          <Field
+            label="Only accept mail from"
+            htmlFor="inbox-accept"
+            hint="Optional. Comma-separated domains or addresses, e.g. github.com. Everyone else is dropped."
+          >
+            <Input id="inbox-accept" placeholder="github.com, noreply@stripe.com" value={acceptFrom} onChange={(e) => setAcceptFrom(e.target.value)} spellCheck={false} />
+          </Field>
           <FailureNote error={mutation.error} />
         </form>
       </DialogContent>
     </Dialog>
   )
+}
+
+function RuleCount({ inboxId }: { inboxId: string }) {
+  const count = useRuleCount(inboxId)
+  return count ? <span>{` · ${count} ${count === 1 ? "rule" : "rules"}`}</span> : null
 }
 
 // ---------------------------------------------------------------------------
