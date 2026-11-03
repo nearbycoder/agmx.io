@@ -23,7 +23,8 @@ export const Route = createFileRoute("/app")({
 
 function AppLayout() {
   const { user } = Route.useRouteContext()
-  useLiveMail()
+  useLiveMail(Boolean(user))
+  if (!user) return null
   return (
     <ComposeProvider>
       <AppShell user={user}>

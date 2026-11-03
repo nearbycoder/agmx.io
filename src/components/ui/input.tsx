@@ -2,11 +2,11 @@ import { forwardRef, type InputHTMLAttributes, type ReactNode, type TextareaHTML
 import { cn } from "~/lib/utils"
 
 const base =
-  "w-full rounded-[10px] border border-line bg-surface px-3 text-sm text-ink shadow-card outline-none transition-colors placeholder:text-faint hover:border-line-strong focus:border-ink/40 focus:ring-4 focus:ring-ink/5 dark:focus:border-accent/60 dark:focus:ring-accent/10 disabled:opacity-60"
+  "w-full rounded-lg border border-line bg-surface px-3 text-[13.5px] text-ink shadow-card outline-none transition-colors placeholder:text-faint hover:border-line-strong focus:border-ink/50 focus:ring-2 focus:ring-ink/8 dark:focus:border-accent/50 dark:focus:ring-accent/15 disabled:opacity-60"
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
   ({ className, invalid, ...props }, ref) => (
-    <input ref={ref} className={cn(base, "h-9", invalid && "border-danger focus:border-danger focus:ring-danger/10", className)} {...props} />
+    <input ref={ref} className={cn(base, "h-[34px]", invalid && "border-danger focus:border-danger focus:ring-danger/10", className)} {...props} />
   )
 )
 Input.displayName = "Input"
@@ -45,7 +45,7 @@ export const Field = ({
 /** Input with a fixed suffix, e.g. the @domain part of an address. */
 export const AddonInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { suffix?: ReactNode; prefix?: ReactNode }>(
   ({ className, suffix, prefix, ...props }, ref) => (
-    <div className={cn("flex h-9 items-stretch overflow-hidden rounded-[10px] border border-line bg-surface shadow-card transition-colors focus-within:border-ink/40 focus-within:ring-4 focus-within:ring-ink/5 dark:focus-within:border-accent/60 dark:focus-within:ring-accent/10", className)}>
+    <div className={cn("flex h-[34px] items-stretch overflow-hidden rounded-lg border border-line bg-surface shadow-card transition-colors focus-within:border-ink/50 focus-within:ring-2 focus-within:ring-ink/8 dark:focus-within:border-accent/50 dark:focus-within:ring-accent/15", className)}>
       {prefix ? <span className="flex items-center border-r border-line bg-surface-2 px-3 text-sm text-muted">{prefix}</span> : null}
       <input ref={ref} className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none" {...props} />
       {suffix ? <span className="flex items-center border-l border-line bg-surface-2 px-3 font-mono text-[13px] text-muted">{suffix}</span> : null}

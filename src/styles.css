@@ -34,8 +34,8 @@
   --radius-2xl: 18px;
   --radius-3xl: 24px;
 
-  --shadow-card: 0 1px 0 0 rgb(0 0 0 / 0.03), 0 1px 2px -1px rgb(0 0 0 / 0.06);
-  --shadow-pop: 0 12px 32px -12px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.08);
+  --shadow-card: 0 1px 1px 0 rgb(0 0 0 / 0.03);
+  --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 0.22), 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 6px -2px rgb(0 0 0 / 0.06);
   --shadow-glow: 0 0 0 1px rgb(200 245 96 / 0.4), 0 8px 40px -8px rgb(200 245 96 / 0.45);
 
   --animate-fade-in: fade-in 0.25s ease-out both;

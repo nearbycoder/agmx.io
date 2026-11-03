@@ -76,19 +76,20 @@ export const CopyButton = ({ value, className, label, size = "sm" }: { value: st
 
 export const EmptyState = ({ icon, title, description, action, className }: { icon: ReactNode; title: ReactNode; description?: ReactNode; action?: ReactNode; className?: string }) => (
   <div className={cn("flex flex-col items-center justify-center px-6 py-14 text-center", className)}>
-    <div className="mb-4 flex size-12 items-center justify-center rounded-2xl border border-line bg-surface-2 text-muted shadow-card [&_svg]:size-5">{icon}</div>
-    <h3 className="text-[15px] font-semibold">{title}</h3>
+    <div className="mb-3 text-faint [&_svg]:size-5">{icon}</div>
+    <h3 className="text-[14px] font-semibold">{title}</h3>
     {description ? <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-muted">{description}</p> : null}
     {action ? <div className="mt-5">{action}</div> : null}
   </div>
 )
 
 export const Meter = ({ value, max, className }: { value: number; max: number | null; className?: string }) => {
-  const percent = max === null ? 4 : max === 0 ? 100 : Math.min(100, (value / max) * 100)
+  if (max === null) return null
+  const percent = max === 0 ? 100 : Math.min(100, (value / max) * 100)
   return (
-    <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-bg-subtle", className)}>
+    <div className={cn("h-1 w-full overflow-hidden rounded-full bg-bg-subtle", className)}>
       <div
-        className={cn("h-full rounded-full transition-all duration-500", percent >= 90 ? "bg-danger" : percent >= 70 ? "bg-warn" : "bg-ink dark:bg-accent")}
+        className={cn("h-full rounded-full transition-all duration-500", percent >= 90 ? "bg-danger" : percent >= 75 ? "bg-warn" : "bg-ink/80 dark:bg-ink/70")}
         style={{ width: `${Math.max(percent, value > 0 ? 3 : 0)}%` }}
       />
     </div>
