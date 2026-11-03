@@ -4382,6 +4382,17 @@
                               }
                             ]
                           },
+                          "heldReason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                          },
                           "labels": {
                             "type": "array",
                             "items": {
@@ -4423,6 +4434,7 @@
                           "extracted",
                           "security",
                           "sendAt",
+                          "heldReason",
                           "labels",
                           "isRead",
                           "isStarred",
@@ -4915,6 +4927,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -5209,6 +5232,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -6014,6 +6038,17 @@
                                 }
                               ]
                             },
+                            "heldReason": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                            },
                             "labels": {
                               "type": "array",
                               "items": {
@@ -6308,6 +6343,7 @@
                             "extracted",
                             "security",
                             "sendAt",
+                            "heldReason",
                             "labels",
                             "isRead",
                             "isStarred",
@@ -6842,6 +6878,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -7136,6 +7183,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -7641,6 +7689,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -7682,6 +7741,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -8309,6 +8369,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -8603,6 +8674,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -9120,6 +9192,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -9414,6 +9497,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -10070,6 +10154,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -10364,6 +10459,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -11276,6 +11372,17 @@
                               }
                             ]
                           },
+                          "heldReason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                          },
                           "labels": {
                             "type": "array",
                             "items": {
@@ -11570,6 +11677,7 @@
                           "extracted",
                           "security",
                           "sendAt",
+                          "heldReason",
                           "labels",
                           "isRead",
                           "isStarred",
@@ -12114,6 +12222,17 @@
                               }
                             ]
                           },
+                          "heldReason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                          },
                           "labels": {
                             "type": "array",
                             "items": {
@@ -12155,6 +12274,7 @@
                           "extracted",
                           "security",
                           "sendAt",
+                          "heldReason",
                           "labels",
                           "isRead",
                           "isStarred",
@@ -12646,6 +12766,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -12940,6 +13071,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -13691,6 +13823,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -13985,6 +14128,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -14812,6 +14956,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -15106,6 +15261,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -15679,6 +15835,17 @@
                           }
                         ]
                       },
+                      "heldReason": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                      },
                       "labels": {
                         "type": "array",
                         "items": {
@@ -15973,6 +16140,7 @@
                       "extracted",
                       "security",
                       "sendAt",
+                      "heldReason",
                       "labels",
                       "isRead",
                       "isStarred",
@@ -16481,6 +16649,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -16775,6 +16954,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",
@@ -17331,6 +17511,17 @@
                         }
                       ]
                     },
+                    "heldReason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+                    },
                     "labels": {
                       "type": "array",
                       "items": {
@@ -17625,6 +17816,7 @@
                     "extracted",
                     "security",
                     "sendAt",
+                    "heldReason",
                     "labels",
                     "isRead",
                     "isStarred",

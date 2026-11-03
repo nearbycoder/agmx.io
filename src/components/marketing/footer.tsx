@@ -41,8 +41,8 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-line">
       <div className="mx-auto max-w-6xl px-5 py-14 sm:px-8">
-        <div className="grid gap-10 md:grid-cols-[1.5fr_repeat(4,1fr)]">
-          <div>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-[1.5fr_repeat(4,1fr)]">
+          <div className="col-span-2 md:col-span-1">
             <Logo />
             <p className="mt-4 max-w-[17rem] text-[13px] leading-relaxed text-muted">Real email inboxes for AI agents. Open source, built on Amazon SES.</p>
           </div>

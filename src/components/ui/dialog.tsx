@@ -25,6 +25,13 @@ export const DialogContent = ({
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-fade-in" />
     <DialogPrimitive.Content
+      onOpenAutoFocus={(e) => {
+        // Keep a field's autoFocus; otherwise focus the dialog itself rather than its close button.
+        const root = e.currentTarget as HTMLElement
+        if (root.contains(document.activeElement)) return
+        e.preventDefault()
+        root.focus()
+      }}
       className={cn(
         "fixed top-[12vh] left-1/2 z-50 flex max-h-[80vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-pop outline-none data-[state=open]:animate-pop",
         className

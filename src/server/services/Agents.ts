@@ -6,7 +6,7 @@ import { Conflict, Forbidden, InvalidRequest, NotFound, QuotaExceeded } from "~/
 import { isValidEmail, normalizeUsername, RESERVED_USERNAMES, USERNAME_RE } from "~/shared/address"
 import { agents, apiKeys, domains, inboxes, inboxRules, messages, user } from "../db/schema"
 import type { AgentRow, InboxRow, InboxRuleRow } from "../db/types"
-import { env } from "../env"
+import { env, isSystemAddress } from "../env"
 import { newId, randomToken, sha256 } from "../ids"
 import { toAgent, toInbox, type InboxStats } from "../serialize"
 import { canAccessAgent, requireAccount } from "./access"
@@ -171,7 +171,11 @@ export class Agents extends Context.Service<Agents, {
               )
             : []
           const serialized = yield* serializeInboxes(inboxRows)
-          return rows.map((row) => ({ row, agent: toAgent(row, serialized.filter((i) => i.agentId === row.id)) }))
+          const loaded = rows.map((row) => ({ row, agent: toAgent(row, serialized.filter((i) => i.agentId === row.id)) }))
+          // The operator's role mailboxes (abuse@, postmaster@…) sort after the agents people actually work with,
+          // so they never become the default sender or the first thing in a list.
+          const roleOnly = (a: (typeof loaded)[number]) => a.agent.inboxes.length > 0 && a.agent.inboxes.every((i) => isSystemAddress(i.address))
+          return [...loaded.filter((a) => !roleOnly(a)), ...loaded.filter(roleOnly)]
         })
 
       const requireAgent = (principal: Principal, agentId: string) =>

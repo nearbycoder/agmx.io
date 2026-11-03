@@ -49,7 +49,7 @@ export function SecurityBanner({ message, view, onViewChange }: { message: Messa
       )}
       role="note"
     >
-      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+      <div className="flex items-start gap-3">
         <ShieldAlert className="mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="font-medium text-ink">{headline}</p>
@@ -76,8 +76,8 @@ export function SecurityBanner({ message, view, onViewChange }: { message: Messa
               ))}
             </ul>
           ) : null}
+          <div className="mt-2.5">{toggle}</div>
         </div>
-        {toggle}
       </div>
     </div>
   )

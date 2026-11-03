@@ -729,6 +729,7 @@ export class Mail extends Context.Service<Mail, {
                     labels: [...(input.labels ?? [])],
                     isRead: true,
                     sendAt,
+                    heldReason,
                     idempotencyKey: context.idempotencyKey ?? null,
                     sizeBytes: files.reduce((n, f) => n + f.content.byteLength, (text ?? "").length + (input.html ?? "").length)
                   })
@@ -1264,7 +1265,7 @@ export class Mail extends Context.Service<Mail, {
           const sendAt = yield* parseSendAt(sendAtInput)
           const heldReason = yield* approvalReason(principal, agent, inbox, all.map((a) => a.address), (att?.n ?? 0) > 0)
           const status: OutboundStatus = heldReason ? "pending_approval" : sendAt ? "scheduled" : "sending"
-          const row = yield* transition(draft.id, ["draft"], { status, sendAt })
+          const row = yield* transition(draft.id, ["draft"], { status, sendAt, heldReason })
           if (!row) return yield* new Conflict({ message: "This draft was already sent." })
           if (status === "sending") return yield* dispatch(row)
           if (heldReason) yield* notifyHeld(row, heldReason)

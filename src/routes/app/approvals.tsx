@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { Check, Clock, Paperclip, ShieldCheck, X } from "lucide-react"
+import { Check, Clock, Paperclip, ShieldCheck, ShieldQuestion, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Page, PageHeader } from "~/components/app/page"
 import { AgentAvatar } from "~/components/brand"
-import { toastFailure } from "~/components/dashboard/common"
+import { QueryError, toastFailure } from "~/components/dashboard/common"
 import { dk, useApprovals } from "~/components/dashboard/queries"
 import { Panel } from "~/components/dashboard/section"
 import { Button } from "~/components/ui/button"
@@ -16,6 +16,7 @@ import { api } from "~/lib/api"
 import { useAgents } from "~/lib/queries"
 import { formatAddress } from "~/shared/address"
 import type { AgentT, MessageT } from "~/shared/api/domain"
+import { formatWhen } from "~/components/mail/queries"
 import { cn, formatBytes, fullDate, relativeTime } from "~/lib/utils"
 
 export const Route = createFileRoute("/app/approvals")({
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/app/approvals")({
 })
 
 function ApprovalsPage() {
-  const { data, isLoading } = useApprovals()
+  const { data, isLoading, error, refetch } = useApprovals()
   const { data: agents } = useAgents()
   const queryClient = useQueryClient()
   const [rejecting, setRejecting] = useState<MessageT | null>(null)
@@ -51,8 +52,8 @@ function ApprovalsPage() {
     mutationFn: (m: MessageT) => api((c) => c.approvals.approve({ params: { messageId: m.id } })),
     onMutate: (m) => optimistic(m.id),
     onSuccess: (sent) =>
-      toast.success(sent.status === "scheduled" ? "Approved — it will send at its scheduled time" : "Approved and sent", {
-        description: sent.to.map((t) => t.address).join(", ")
+      toast.success(sent.status === "scheduled" ? "Approved" : "Approved and sent", {
+        description: sent.status === "scheduled" ? "It will send at its scheduled time." : sent.to.map((t) => t.address).join(", ")
       }),
     onError: (e, _m, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(dk.approvals, ctx.previous)
@@ -68,7 +69,7 @@ function ApprovalsPage() {
       setRejecting(null)
       return optimistic(input.m.id)
     },
-    onSuccess: () => toast.success("Rejected — the agent has been notified"),
+    onSuccess: () => toast.success("Rejected", { description: "The agent has been notified." }),
     onError: (e, _input, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(dk.approvals, ctx.previous)
       toastFailure(e)
@@ -88,6 +89,10 @@ function ApprovalsPage() {
           <Skeleton className="h-44 rounded-xl" />
           <Skeleton className="h-44 rounded-xl" />
         </div>
+      ) : error && !data ? (
+        <Panel>
+          <QueryError error={error} onRetry={refetch} what="approvals" />
+        </Panel>
       ) : !data?.length ? (
         <Panel>
           <EmptyState
@@ -162,10 +167,9 @@ function ApprovalItem({
               <Clock className="size-3" />
               <span title={fullDate(m.createdAt)}>Held {relativeTime(m.createdAt)}</span>
               {m.sendAt ? (
-                <>
-                  <span className="text-faint">·</span>
-                  <span>Scheduled for {fullDate(m.sendAt)}</span>
-                </>
+                <span className="whitespace-nowrap">
+                  <span className="mr-1.5 text-faint">·</span>Scheduled for {formatWhen(m.sendAt)}
+                </span>
               ) : null}
             </div>
           </div>
@@ -175,10 +179,18 @@ function ApprovalItem({
             <X /> Reject
           </Button>
           <Button size="sm" loading={busy} onClick={onApprove}>
-            <Check /> Approve and send
+            <Check /> {m.sendAt ? "Approve" : "Approve and send"}
           </Button>
         </div>
       </div>
+      {m.heldReason ? (
+        <div className="flex items-start gap-2 border-b border-line bg-warn-soft/50 px-5 py-2.5 text-[12.5px] text-ink-2">
+          <ShieldQuestion className="mt-px size-3.5 shrink-0 text-warn" />
+          <span>
+            <span className="font-medium text-ink">Held because</span> {m.heldReason.charAt(0).toLowerCase() + m.heldReason.slice(1)}
+          </span>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 px-5 py-4">
         <dl className="grid grid-cols-[36px_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px]">

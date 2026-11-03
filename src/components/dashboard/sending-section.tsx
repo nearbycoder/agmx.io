@@ -33,7 +33,7 @@ export function SendingSection({ agentId, sendPolicy, approveAttachments }: { ag
     onSuccess: (agent, payload) => {
       void queryClient.invalidateQueries({ queryKey: qk.agent(agentId) })
       void queryClient.invalidateQueries({ queryKey: qk.agents })
-      if (payload.sendPolicy) toast.success(POLICIES.find((p) => p.value === agent.sendPolicy)?.title ?? "Send policy saved")
+      if (payload.sendPolicy) toast.success(`Send policy: ${POLICIES.find((p) => p.value === agent.sendPolicy)?.title ?? "saved"}`)
       else toast.success(agent.approveAttachments ? "Messages with attachments now need approval" : "Attachments no longer need approval")
     },
     onError: (e) => {

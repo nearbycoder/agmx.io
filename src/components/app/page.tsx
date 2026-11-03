@@ -14,7 +14,7 @@ export const PageHeader = ({
   eyebrow?: ReactNode
   className?: string
 }) => (
-  <div className={cn("flex flex-col gap-4 pb-7 sm:flex-row sm:items-end sm:justify-between", className)}>
+  <div className={cn("flex flex-col gap-4 pb-7 sm:flex-row sm:items-start sm:justify-between", className)}>
     <div className="min-w-0">
       {eyebrow ? <div className="mb-2 text-[12px] font-medium text-muted">{eyebrow}</div> : null}
       <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.02em]">{title}</h1>

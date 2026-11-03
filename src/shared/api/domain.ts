@@ -275,6 +275,9 @@ export const MessageSummary = Schema.Struct({
   extracted: Extracted,
   security: Schema.NullOr(SecurityReport),
   sendAt: NullableTimestamp,
+  heldReason: Schema.NullOr(Schema.String).annotate({
+    description: "Why the agent's send policy held this message for human approval. Null for mail that wasn't held."
+  }),
   labels: Schema.Array(Schema.String),
   isRead: Schema.Boolean,
   isStarred: Schema.Boolean,

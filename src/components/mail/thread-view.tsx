@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import {
   AlertTriangle,
   Archive,
@@ -20,6 +21,7 @@ import {
   Trash2,
   X
 } from "lucide-react"
+import { toast } from "sonner"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import type { MessageT } from "~/shared/api/domain"
 import { SenderAvatar } from "~/components/brand"
@@ -29,7 +31,7 @@ import { ConfirmDialog } from "~/components/ui/dialog"
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { copyText, Skeleton } from "~/components/ui/misc"
 import { useThread } from "~/lib/queries"
-import { cn, formatBytes, fullDate, mailTime } from "~/lib/utils"
+import { cn, formatBytes, fullDate, mailTime, messageDate } from "~/lib/utils"
 import { HtmlFrame, PlainBody } from "./email-body"
 import { ExtractedPanel, hasExtracted } from "./extracted-panel"
 import { formatWhen, useCancelScheduled } from "./queries"
@@ -37,6 +39,14 @@ import { defaultBodyView, SecurityBanner, type BodyView } from "./security-banne
 import { UNSENT, useMailActions } from "./use-mail-actions"
 
 export type ReplyMode = "reply" | "replyAll" | "forward"
+
+/** Short file type for an attachment: the extension when there is one ("PDF", "ICS"), else the MIME subtype. */
+const fileKind = (filename: string | null | undefined, contentType: string) => {
+  const ext = filename?.match(/\.([a-z0-9]{1,5})$/i)?.[1]
+  if (ext) return ext.toUpperCase()
+  const sub = (contentType.split("/")[1] ?? contentType).split(/[;+]/)[0]!
+  return sub.replace(/^(x-|vnd\.)/, "").toUpperCase()
+}
 
 const formatAddr = (a: { name?: string | null; address: string }) => (a.name ? `${a.name} <${a.address}>` : a.address)
 
@@ -57,7 +67,8 @@ export function ThreadView({
 }) {
   const { data: thread, isLoading, error } = useThread(threadId)
   const actions = useMailActions()
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  /** Message ids awaiting delete confirmation: the whole thread, or one message from it. */
+  const [confirmDelete, setConfirmDelete] = useState<ReadonlyArray<string> | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const messages = thread?.messages ?? []
@@ -129,16 +140,34 @@ export function ThreadView({
         >
           {allArchived ? <ArchiveRestore /> : <Archive />}
         </ToolbarButton>
-        <ToolbarButton label={anySpam ? "Not spam" : "Report spam"} onClick={() => actions.update(ids, { isSpam: !anySpam })}>
-          <ShieldAlert />
-        </ToolbarButton>
-        <ToolbarButton label="Mark unread" shortcut="U" disabled={!latestInbound} onClick={() => latestInbound && actions.update([latestInbound.id], { isRead: false })}>
-          <MailOpen />
-        </ToolbarButton>
+        {latestInbound ? (
+          <>
+            <ToolbarButton
+              label={anySpam ? "Not spam" : "Report spam"}
+              onClick={() => {
+                actions.update(ids, { isSpam: !anySpam })
+                toast.success(anySpam ? "Moved to Inbox" : "Moved to Spam")
+                onArchived()
+              }}
+            >
+              {anySpam ? <ShieldCheck /> : <ShieldAlert />}
+            </ToolbarButton>
+            <ToolbarButton
+              label="Mark unread"
+              shortcut="U"
+              onClick={() => {
+                actions.update([latestInbound.id], { isRead: false })
+                onClose()
+              }}
+            >
+              <MailOpen />
+            </ToolbarButton>
+          </>
+        ) : null}
         <ToolbarButton label={starred ? "Unstar" : "Star"} shortcut="S" onClick={() => latest && actions.update([latest.id], { isStarred: !starred })}>
           <Star className={cn(starred && "fill-warn text-warn")} />
         </ToolbarButton>
-        <ToolbarButton label="Delete" shortcut="#" onClick={() => setConfirmDelete(true)}>
+        <ToolbarButton label="Delete" shortcut="#" onClick={() => setConfirmDelete(ids)}>
           <Trash2 />
         </ToolbarButton>
         <div className="ml-auto flex items-center">
@@ -182,7 +211,7 @@ export function ThreadView({
                   onCollapse={() => setExpanded((s) => new Set([...s].filter((x) => x !== m.id)))}
                   onReply={(mode) => onReply(m, mode)}
                   onStar={() => actions.update([m.id], { isStarred: !m.isStarred })}
-                  onDelete={() => actions.remove([m.id])}
+                  onDelete={() => setConfirmDelete([m.id])}
                   onEditDraft={() => onEditDraft(m)}
                 />
               ) : (
@@ -219,19 +248,22 @@ export function ThreadView({
       </div>
 
       <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title={messages.length > 1 ? `Delete this conversation?` : "Delete this message?"}
+        open={confirmDelete !== null}
+        onOpenChange={(open) => !open && setConfirmDelete(null)}
+        title={(confirmDelete?.length ?? 0) > 1 ? "Delete this conversation?" : "Delete this message?"}
         description={
-          messages.length > 1
-            ? `All ${messages.length} messages in this thread will be permanently deleted, including attachments. This can't be undone.`
+          (confirmDelete?.length ?? 0) > 1
+            ? `All ${confirmDelete!.length} messages in this thread will be permanently deleted, including attachments. This can't be undone.`
             : "The message and its attachments will be permanently deleted. This can't be undone."
         }
         confirmLabel="Delete"
         onConfirm={() => {
-          actions.remove(ids)
-          setConfirmDelete(false)
-          onDeleted()
+          if (!confirmDelete) return
+          actions.remove(confirmDelete)
+          // Deleting the last message (or the whole thread) leaves nothing to show.
+          const emptied = ids.every((id) => confirmDelete.includes(id))
+          setConfirmDelete(null)
+          if (emptied) onDeleted()
         }}
       />
     </div>
@@ -310,8 +342,12 @@ function MessageItem({
           </div>
         </div>
         <div className="-mt-1 flex shrink-0 items-center">
-          <span className="mr-1.5 hidden text-[12px] whitespace-nowrap text-muted tabular-nums lg:inline">{fullDate(m.createdAt)}</span>
-          <span className="mr-1.5 text-[12px] whitespace-nowrap text-muted tabular-nums lg:hidden">{mailTime(m.createdAt)}</span>
+          <span className="mr-1.5 hidden text-[12px] whitespace-nowrap text-muted tabular-nums lg:inline" title={fullDate(m.createdAt)}>
+            {messageDate(m.createdAt)}
+          </span>
+          <span className="mr-1.5 text-[12px] whitespace-nowrap text-muted tabular-nums lg:hidden" title={fullDate(m.createdAt)}>
+            {mailTime(m.createdAt)}
+          </span>
           <Tooltip content={m.isStarred ? "Unstar" : "Star"}>
             <Button variant="ghost" size="icon-sm" onClick={onStar} aria-label={m.isStarred ? "Unstar" : "Star"}>
               <Star className={cn(m.isStarred && "fill-warn text-warn")} />
@@ -425,8 +461,19 @@ function MessageItem({
             {m.sendAt ? `Scheduled to send ${formatWhen(m.sendAt)}.` : "Scheduled to send."}
           </OutboxNote>
         ) : m.status === "pending_approval" ? (
-          <OutboxNote icon={<ShieldAlert />} tone="warn">
-            The agent's send policy is holding this message. It goes out once a human approves it.
+          <OutboxNote
+            icon={<ShieldAlert />}
+            tone="warn"
+            action={
+              <Link to="/app/approvals">
+                <Button variant="secondary" size="sm">
+                  Review
+                </Button>
+              </Link>
+            }
+          >
+            {m.heldReason ? `Held for approval: ${m.heldReason.charAt(0).toLowerCase()}${m.heldReason.slice(1)}` : "The agent's send policy is holding this message."} It goes out once a
+            human approves it.
           </OutboxNote>
         ) : m.status === "rejected" ? (
           <OutboxNote icon={<AlertTriangle />} tone="danger">
@@ -548,7 +595,7 @@ function AttachmentTile({ attachment: a, quarantined = false }: { attachment: Me
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium">{a.filename}</span>
           <span className="block text-[12px] text-muted">
-            {formatBytes(a.size)} · {(a.contentType.split("/")[1] ?? a.contentType).toUpperCase()}
+            {formatBytes(a.size)} · {fileKind(a.filename, a.contentType)}
           </span>
         </span>
         <Download className="size-4 text-faint transition-colors group-hover:text-ink" />

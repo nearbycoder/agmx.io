@@ -149,7 +149,10 @@ function LoginPage() {
                   <button
                     type="button"
                     className="text-center text-[13px] text-muted hover:text-ink"
-                    onClick={() => setPasswordMode(passwordMode === "signin" ? "signup" : "signin")}
+                    onClick={() => {
+                      setPasswordMode(passwordMode === "signin" ? "signup" : "signin")
+                      setError(null)
+                    }}
                   >
                     {passwordMode === "signin" ? "First time here? Create an account" : "Already have an account? Sign in"}
                   </button>

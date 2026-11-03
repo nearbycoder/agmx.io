@@ -11,7 +11,7 @@ export const FOLDERS = [
   { id: "sent", label: "Sent", icon: Send },
   { id: "drafts", label: "Drafts", icon: FileText },
   { id: "scheduled", label: "Scheduled", icon: Clock },
-  { id: "pending", label: "Awaiting approval", icon: ShieldQuestion },
+  { id: "pending", label: "Held", icon: ShieldQuestion },
   { id: "archived", label: "Archived", icon: Archive },
   { id: "spam", label: "Spam", icon: ShieldAlert },
   { id: "all", label: "All mail", icon: Layers }
@@ -74,9 +74,9 @@ export function FolderPane({ folder, inbox, agents }: { folder: FolderId; inbox?
           return (
             <Link key={i.id} to="/app/mail" search={(prev) => ({ folder: prev.folder, inbox: i.id })} title={i.address} className={rowClass(active)}>
               <AgentAvatar name={i.agent.name} color={i.agent.color} size="xs" />
-              <span className="flex min-w-0 flex-1 items-baseline">
-                <span className="truncate">{i.localPart}</span>
-                <span className="truncate text-[12px] font-normal text-faint">@{i.domain}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {i.localPart}
+                <span className="text-[12px] font-normal text-faint">@{i.domain}</span>
               </span>
               <Count value={i.unreadCount} strong={active || i.unreadCount > 0} />
             </Link>

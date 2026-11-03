@@ -48,7 +48,7 @@ export const UsageChart = ({ days, className }: { days: ReadonlyArray<Point>; cl
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]">
-        <Legend swatch="bg-accent ring-1 ring-inset ring-black/10" label="Received" value={totals.received} />
+        <Legend swatch="bg-accent ring-1 ring-inset ring-black/10 dark:ring-transparent" label="Received" value={totals.received} />
         <Legend swatch="bg-ink/80" label="Sent" value={totals.sent} />
       </div>
       <div className="relative" ref={ref}>

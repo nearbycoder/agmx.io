@@ -4,7 +4,7 @@ import { CheckCircle2, Clock, Globe, MoreHorizontal, Plus, RefreshCw, Trash2 } f
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Page, PageHeader } from "~/components/app/page"
-import { FailureNote, toastFailure, UpgradePanel } from "~/components/dashboard/common"
+import { FailureNote, QueryError, toastFailure, UpgradePanel } from "~/components/dashboard/common"
 import { DnsRecordTable } from "~/components/dashboard/dns-records"
 import { Panel, Section } from "~/components/dashboard/section"
 import { Button } from "~/components/ui/button"
@@ -31,7 +31,7 @@ const DomainStatus = ({ status }: { status: string }) => (
 
 function DomainsPage() {
   const { data: me } = useMe()
-  const { data: domains, isLoading } = useDomains()
+  const { data: domains, isLoading, error, refetch } = useDomains()
   const [adding, setAdding] = useState(false)
   const plan = me?.plan
   const gated = plan?.customDomains === 0
@@ -73,6 +73,10 @@ function DomainsPage() {
             />
           ) : isLoading ? (
             <Skeleton className="h-64 rounded-xl" />
+          ) : error && !domains ? (
+            <Panel>
+              <QueryError error={error} onRetry={refetch} what="domains" />
+            </Panel>
           ) : domains?.length ? (
             <div className="flex flex-col gap-6">
               {domains.map((d) => (

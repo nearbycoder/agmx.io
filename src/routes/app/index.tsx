@@ -4,10 +4,10 @@ import { ArrowRight, Inbox, Paperclip, Plus, Send } from "lucide-react"
 import { useState } from "react"
 import { Page, PageHeader } from "~/components/app/page"
 import { AgentAvatar, SenderAvatar } from "~/components/brand"
-import { CopyField, origin, SectionLink } from "~/components/dashboard/common"
+import { CopyField, origin, QueryError, SectionLink } from "~/components/dashboard/common"
 import { CreateAgentDialog } from "~/components/dashboard/create-agent-dialog"
 import { Panel, PanelEmpty, Section } from "~/components/dashboard/section"
-import { ApprovalsCallout } from "~/components/dashboard/approvals-callout"
+import { ApprovalsCallout, SendingPausedCallout } from "~/components/dashboard/approvals-callout"
 import { SignupCallout } from "~/components/dashboard/signup-callout"
 import { StatStrip } from "~/components/dashboard/stat-card"
 import { UsageChart } from "~/components/dashboard/usage-chart"
@@ -35,8 +35,8 @@ const plural = (n: number, word: string, many = `${word}s`) => `${n.toLocaleStri
 function OverviewPage() {
   const { user } = Route.useRouteContext()
   const { data: me, isLoading: meLoading } = useMe()
-  const { data: agents, isLoading: agentsLoading } = useAgents()
-  const { data: usage } = useUsage(14)
+  const { data: agents, isLoading: agentsLoading, error: agentsError, refetch: refetchAgents } = useAgents()
+  const { data: usage, error: usageError, refetch: refetchUsage } = useUsage(14)
   const [createOpen, setCreateOpen] = useState(false)
   const recent = useQuery({
     queryKey: ["messages", { overview: true }],
@@ -111,6 +111,7 @@ function OverviewPage() {
       />
 
       <div className="flex flex-col gap-8">
+        <SendingPausedCallout agents={agents} />
         <ApprovalsCallout />
         <SignupCallout />
         {noAgents ? <GettingStarted onCreate={() => setCreateOpen(true)} /> : null}
@@ -119,7 +120,15 @@ function OverviewPage() {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-8">
             <Section title="Activity" action={<span className="text-[12px] text-muted">Last 14 days · UTC</span>}>
-              <Panel className="p-5">{usage ? <UsageChart days={usage.days} /> : <Skeleton className="h-[220px] w-full" />}</Panel>
+              <Panel className="p-5">
+                {usage ? (
+                  <UsageChart days={usage.days} />
+                ) : usageError ? (
+                  <QueryError error={usageError} onRetry={refetchUsage} what="activity" className="h-[220px] py-0" />
+                ) : (
+                  <Skeleton className="h-[220px] w-full" />
+                )}
+              </Panel>
             </Section>
 
             <Section title="Recent mail" action={<SectionLink to="/app/mail">Open mail <ArrowRight className="size-3.5" /></SectionLink>}>
@@ -134,6 +143,8 @@ function OverviewPage() {
                       </div>
                     </div>
                   ))
+                ) : recent.isError && !recent.data ? (
+                  <QueryError error={recent.error} onRetry={() => recent.refetch()} what="recent mail" />
                 ) : recent.data?.messages.length ? (
                   recent.data.messages.map((m) => {
                     const counterpart = m.direction === "inbound" ? m.from : (m.to[0] ?? m.from)
@@ -183,6 +194,8 @@ function OverviewPage() {
                       <Skeleton className="h-4 flex-1" />
                     </div>
                   ))
+                ) : agentsError && !agents ? (
+                  <QueryError error={agentsError} onRetry={refetchAgents} what="agents" />
                 ) : agents?.length ? (
                   agents.slice(0, 6).map((agent) => {
                     const unread = agent.inboxes.reduce((s, i) => s + i.unreadCount, 0)
@@ -197,13 +210,17 @@ function OverviewPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="truncate text-[13.5px] font-medium">{agent.name}</span>
-                            {agent.status === "paused" ? <span className="text-[12px] text-warn">Paused</span> : null}
+                            {agent.status === "paused" ? (
+                              <span className="text-[12px] text-warn">Paused</span>
+                            ) : agent.sendingPaused ? (
+                              <span className="text-[12px] text-danger">Sending paused</span>
+                            ) : null}
                           </div>
                           <div className="truncate font-mono text-[12px] text-muted">{agent.inboxes[0]?.address ?? "No inbox yet"}</div>
                         </div>
                         {unread ? (
                           <span className="flex items-center gap-1.5 text-[12px] font-medium tabular-nums">
-                            <span className="size-1.5 rounded-full bg-accent ring-1 ring-black/10" />
+                            <span className="size-1.5 rounded-full bg-accent ring-1 ring-black/10 dark:ring-transparent" />
                             {unread}
                           </span>
                         ) : null}
@@ -286,7 +303,7 @@ function GettingStarted({ onCreate }: { onCreate: () => void }) {
           <p className="mt-0.5 text-[13px] text-muted">Three steps, and your agent can sign up for anything that needs an email address.</p>
         </div>
         <Button onClick={onCreate} className="self-start sm:self-auto">
-          <Plus /> Create agent
+          <Plus /> New agent
         </Button>
       </div>
       <ol className="grid divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">

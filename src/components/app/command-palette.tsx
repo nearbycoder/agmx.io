@@ -1,7 +1,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { useNavigate } from "@tanstack/react-router"
 import { Command } from "cmdk"
-import { Bot, BookOpen, Copy, Globe, Inbox, KeyRound, LayoutGrid, Moon, PenSquare, Plus, Settings, Shield, Sun, ShieldCheck } from "lucide-react"
+import { Bot, BookOpen, Copy, Globe, Inbox, KeyRound, LayoutGrid, Moon, PenSquare, Plus, ServerCog, Settings, Sun, ShieldCheck } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { AgentAvatar } from "~/components/brand"
 import { copyText } from "~/components/ui/misc"
@@ -64,7 +64,7 @@ export function CommandPalette({ open, onOpenChange, isAdmin }: { open: boolean;
                 <Item icon={<Plus />} onSelect={() => run(() => navigate({ to: "/app/agents", search: { new: true } }))}>
                   Create agent
                 </Item>
-                <Item icon={<KeyRound />} onSelect={() => run(() => navigate({ to: "/app/keys" }))}>
+                <Item icon={<KeyRound />} onSelect={() => run(() => navigate({ to: "/app/keys", search: { new: true } }))}>
                   Create API key
                 </Item>
                 <Item icon={<Copy />} onSelect={() => run(() => void copyText(`${window.location.origin}/mcp`, "MCP URL copied"))}>
@@ -82,7 +82,7 @@ export function CommandPalette({ open, onOpenChange, isAdmin }: { open: boolean;
                 <Item icon={<Globe />} onSelect={() => run(() => navigate({ to: "/app/domains" }))}>Domains</Item>
                 <Item icon={<KeyRound />} onSelect={() => run(() => navigate({ to: "/app/keys" }))}>API keys</Item>
                 <Item icon={<Settings />} onSelect={() => run(() => navigate({ to: "/app/settings" }))}>Settings</Item>
-                {isAdmin ? <Item icon={<Shield />} onSelect={() => run(() => navigate({ to: "/app/admin" }))}>Operator</Item> : null}
+                {isAdmin ? <Item icon={<ServerCog />} onSelect={() => run(() => navigate({ to: "/app/admin" }))}>Operator</Item> : null}
                 <Item icon={<BookOpen />} onSelect={() => run(() => navigate({ to: "/docs" }))}>Documentation</Item>
               </Command.Group>
               {agents?.length ? (

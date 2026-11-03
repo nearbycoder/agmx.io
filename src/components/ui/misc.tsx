@@ -5,9 +5,22 @@ import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { cn } from "~/lib/utils"
 
-export const Switch = ({ checked, onCheckedChange, disabled, id }: { checked: boolean; onCheckedChange: (v: boolean) => void; disabled?: boolean; id?: string }) => (
+export const Switch = ({
+  checked,
+  onCheckedChange,
+  disabled,
+  id,
+  "aria-label": ariaLabel
+}: {
+  checked: boolean
+  onCheckedChange: (v: boolean) => void
+  disabled?: boolean
+  id?: string
+  "aria-label"?: string
+}) => (
   <SwitchPrimitive.Root
     id={id}
+    aria-label={ariaLabel}
     checked={checked}
     onCheckedChange={onCheckedChange}
     disabled={disabled}

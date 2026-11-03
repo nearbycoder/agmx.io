@@ -112,6 +112,21 @@ describe("system inboxes", () => {
       where i.user_id = ${userId} and a.name = 'Operator' order by i.address`
     expect(rows.map((r) => r.address)).toEqual(["abuse@ops.test", "postmaster@ops.test", "privacy@ops.test"])
   })
+
+  it("won't let an operator remove their own operator role", async () => {
+    const res = await call("PATCH", `/admin/users/${userId}`, { cookie, body: { role: "user" } })
+    expect(res.status).toBe(403)
+    const [row] = await sql<{ role: string }[]>`select role from "user" where id = ${userId}`
+    expect(row!.role).toBe("admin")
+  })
+
+  it("lists the role-mailbox agent after the user's own agents", async () => {
+    const list = await call("GET", "/agents", { key: accountKey })
+    expect(list.status).toBe(200)
+    const names = (list.body as Array<{ name: string }>).map((a) => a.name)
+    expect(names.at(-1)).toBe("Operator")
+    expect(names).toContain("Scout")
+  })
 })
 
 describe("export", () => {

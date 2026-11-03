@@ -4,8 +4,9 @@ import { AlertTriangle, CheckCircle2, Circle, ShieldAlert } from "lucide-react"
 import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Page, PageHeader } from "~/components/app/page"
-import { CopyField, KV, NativeSelect, Notice, toastFailure } from "~/components/dashboard/common"
+import { CopyField, KV, NativeSelect, Notice, QueryError, toastFailure } from "~/components/dashboard/common"
 import { Panel, Section } from "~/components/dashboard/section"
+import { Tooltip } from "~/components/ui/menu"
 import { EmptyState, Meter, Skeleton } from "~/components/ui/misc"
 import { Table, TBody, Td, Th, THead, Tr } from "~/components/ui/table"
 import { api } from "~/lib/api"
@@ -46,7 +47,13 @@ function AdminPage() {
 }
 
 function SystemSection() {
-  const { data: sys, isLoading } = useQuery({ queryKey: qk.system, queryFn: () => api((c) => c.admin.system()) })
+  const { data: sys, isLoading, error, refetch } = useQuery({ queryKey: qk.system, queryFn: () => api((c) => c.admin.system()) })
+  if (error && !sys)
+    return (
+      <Panel>
+        <QueryError error={error} onRetry={refetch} what="server status" />
+      </Panel>
+    )
   if (isLoading || !sys) return <Skeleton className="h-80 rounded-xl" />
   const ses = sys.sesAccount
   const region = sys.awsRegion
@@ -105,7 +112,7 @@ function SystemSection() {
           <KV label="Mail transport">
             <span className="inline-flex items-center gap-1.5">
               {dot(sys.mailTransport === "ses")}
-              {sys.mailTransport === "ses" ? "Amazon SES" : "Console log (development)"}
+              {sys.mailTransport === "ses" ? "Amazon SES" : "Development log (not sent)"}
             </span>
           </KV>
           <KV label="Shared domain">
@@ -188,7 +195,7 @@ function SystemSection() {
 
 function UsersSection() {
   const queryClient = useQueryClient()
-  const { data: users, isLoading } = useQuery({ queryKey: qk.adminUsers, queryFn: () => api((c) => c.admin.users()) })
+  const { data: users, isLoading, error, refetch } = useQuery({ queryKey: qk.adminUsers, queryFn: () => api((c) => c.admin.users()) })
   const update = useMutation({
     mutationFn: (input: { userId: string; plan?: "free" | "pro" | "scale" | "unlimited"; role?: "user" | "admin" }) =>
       api((c) => c.admin.updateUser({ params: { userId: input.userId }, payload: { plan: input.plan, role: input.role } })),
@@ -199,56 +206,63 @@ function UsersSection() {
     },
     onError: (e) => toastFailure(e)
   })
+  const { data: me } = useMe()
+  const rowPending = (userId: string) => update.isPending && update.variables?.userId === userId
   return (
     <Section title="Accounts" description={users ? `${users.length} ${users.length === 1 ? "account" : "accounts"}` : undefined}>
       {isLoading ? (
         <Skeleton className="h-32 w-full rounded-xl" />
+      ) : error && !users ? (
+        <Panel>
+          <QueryError error={error} onRetry={refetch} what="accounts" />
+        </Panel>
       ) : (
         <Table>
           <THead>
             <Th>Account</Th>
-            <Th className="text-right">Agents</Th>
-            <Th className="text-right">Inboxes</Th>
-            <Th className="text-right">Sent this month</Th>
-            <Th>Plan</Th>
-            <Th>Role</Th>
-            <Th>Joined</Th>
+            <Th className="hidden text-right lg:table-cell">Agents</Th>
+            <Th className="hidden text-right lg:table-cell">Inboxes</Th>
+            <Th className="hidden text-right lg:table-cell">Sent this month</Th>
+            <Th>
+              Plan<span className="md:hidden"> and role</span>
+            </Th>
+            <Th className="hidden md:table-cell">Role</Th>
+            <Th className="hidden xl:table-cell">Joined</Th>
           </THead>
           <TBody>
             {users?.map((u) => (
               <Tr key={u.id} className={cn(update.isPending && update.variables?.userId === u.id && "opacity-60")}>
                 <Td>
                   <div className="font-medium">{u.name || "—"}</div>
-                  <div className="text-[12.5px] text-muted">{u.email}</div>
+                  <div className="text-[12.5px] break-all text-muted">{u.email}</div>
+                  <div className="mt-0.5 text-[12px] text-faint lg:hidden">
+                    {u.agents} agents · {u.inboxes} inboxes · {u.sentThisMonth.toLocaleString()} sent
+                  </div>
                 </Td>
-                <Td className="text-right tabular-nums">{u.agents}</Td>
-                <Td className="text-right tabular-nums">{u.inboxes}</Td>
-                <Td className="text-right tabular-nums">{u.sentThisMonth.toLocaleString()}</Td>
-                <Td>
-                  <NativeSelect
-                    aria-label={`Plan for ${u.email}`}
-                    className="h-[30px] w-32 text-[13px]"
-                    value={u.plan}
-                    onChange={(plan) => update.mutate({ userId: u.id, plan: plan as "free" | "pro" | "scale" | "unlimited" })}
-                  >
-                    <option value="free">Starter</option>
-                    <option value="pro">Pro</option>
-                    <option value="scale">Scale</option>
-                    <option value="unlimited">Unlimited</option>
-                  </NativeSelect>
+                <Td className="hidden text-right tabular-nums lg:table-cell">{u.agents}</Td>
+                <Td className="hidden text-right tabular-nums lg:table-cell">{u.inboxes}</Td>
+                <Td className="hidden text-right tabular-nums lg:table-cell">{u.sentThisMonth.toLocaleString()}</Td>
+                <Td className="py-2">
+                  <div className="flex flex-col gap-1.5">
+                    <NativeSelect
+                      disabled={rowPending(u.id)}
+                      aria-label={`Plan for ${u.email}`}
+                      className="h-[30px] w-32 text-[13px]"
+                      value={u.plan}
+                      onChange={(plan) => update.mutate({ userId: u.id, plan: plan as "free" | "pro" | "scale" | "unlimited" })}
+                    >
+                      <option value="free">Starter</option>
+                      <option value="pro">Pro</option>
+                      <option value="scale">Scale</option>
+                      <option value="unlimited">Unlimited</option>
+                    </NativeSelect>
+                    <RoleSelect user={u} self={u.id === me?.user.id} disabled={rowPending(u.id)} className="md:hidden" onChange={(role) => update.mutate({ userId: u.id, role })} />
+                  </div>
                 </Td>
-                <Td>
-                  <NativeSelect
-                    aria-label={`Role for ${u.email}`}
-                    className="h-[30px] w-28 text-[13px]"
-                    value={u.role}
-                    onChange={(role) => update.mutate({ userId: u.id, role: role as "user" | "admin" })}
-                  >
-                    <option value="user">User</option>
-                    <option value="admin">Operator</option>
-                  </NativeSelect>
+                <Td className="hidden md:table-cell">
+                  <RoleSelect user={u} self={u.id === me?.user.id} disabled={rowPending(u.id)} onChange={(role) => update.mutate({ userId: u.id, role })} />
                 </Td>
-                <Td className="whitespace-nowrap text-muted">{relativeTime(u.createdAt)}</Td>
+                <Td className="hidden whitespace-nowrap text-muted xl:table-cell">{relativeTime(u.createdAt)}</Td>
               </Tr>
             ))}
           </TBody>
@@ -259,3 +273,37 @@ function UsersSection() {
 }
 
 const Code = ({ children }: { children: ReactNode }) => <code className="font-mono text-[12px] text-ink-2">{children}</code>
+
+function RoleSelect({
+  user,
+  self,
+  disabled,
+  className,
+  onChange
+}: {
+  user: { email: string; role: string }
+  self: boolean
+  disabled: boolean
+  className?: string
+  onChange: (role: "user" | "admin") => void
+}) {
+  const select = (
+    <NativeSelect
+      disabled={disabled || (self && user.role === "admin")}
+      aria-label={`Role for ${user.email}`}
+      className={cn("h-[30px] w-28 text-[13px]", className)}
+      value={user.role}
+      onChange={(role) => onChange(role as "user" | "admin")}
+    >
+      <option value="user">User</option>
+      <option value="admin">Operator</option>
+    </NativeSelect>
+  )
+  if (!(self && user.role === "admin")) return select
+  // Operators can't demote themselves (and lose this page); another operator has to.
+  return (
+    <Tooltip content="Another operator has to change your role">
+      <span className={cn("inline-block", className)}>{select}</span>
+    </Tooltip>
+  )
+}

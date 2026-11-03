@@ -2482,6 +2482,8 @@ export interface operations {
                                 sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
+                            /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                            heldReason: string | null;
                             labels: string[];
                             isRead: boolean;
                             isStarred: boolean;
@@ -2612,6 +2614,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -2811,6 +2815,8 @@ export interface operations {
                                 sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
+                            /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                            heldReason: string | null;
                             labels: string[];
                             isRead: boolean;
                             isStarred: boolean;
@@ -2964,6 +2970,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -3165,6 +3173,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -3279,6 +3289,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -3452,6 +3464,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -3656,6 +3670,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -3970,6 +3986,8 @@ export interface operations {
                                 sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
+                            /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                            heldReason: string | null;
                             labels: string[];
                             isRead: boolean;
                             isStarred: boolean;
@@ -4123,6 +4141,8 @@ export interface operations {
                                 sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
+                            /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                            heldReason: string | null;
                             labels: string[];
                             isRead: boolean;
                             isStarred: boolean;
@@ -4248,6 +4268,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -4513,6 +4535,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -4713,6 +4737,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -4905,6 +4931,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -5054,6 +5082,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;
@@ -5254,6 +5284,8 @@ export interface operations {
                             sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
+                        /** @description Why the agent's send policy held this message for human approval. Null for mail that wasn't held. */
+                        heldReason: string | null;
                         labels: string[];
                         isRead: boolean;
                         isStarred: boolean;

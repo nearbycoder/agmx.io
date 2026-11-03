@@ -113,9 +113,11 @@ describe("send approvals", () => {
 
     const held = await call("POST", "/messages", { from: agent.address, to: "stranger@agmx.test", subject: "Hello stranger", text: "hi" }, agent.key)
     expect(held.body.status).toBe("pending_approval")
+    expect(held.body.heldReason).toBe(`stranger@agmx.test hasn't exchanged mail with ${agent.address} before.`)
     // Ledger has corresponded with Scout already, so it goes straight out.
     const known = await call("POST", "/messages", { from: agent.address, to: "ledger@agmx.test", subject: "Known", text: "hi" }, agent.key)
     expect(known.body.status).toBe("sent")
+    expect(known.body.heldReason).toBeNull()
 
     const queue = await call("GET", "/approvals")
     expect(queue.body.map((m: { id: string }) => m.id)).toContain(held.body.id)
@@ -130,6 +132,7 @@ describe("send approvals", () => {
     await call("PATCH", `/agents/${agent.id}`, { sendPolicy: "all" })
     const held = await call("POST", "/messages", { from: agent.address, to: "ledger@agmx.test", subject: "Needs review", text: "hi" }, agent.key)
     expect(held.body.status).toBe("pending_approval")
+    expect(held.body.heldReason).toMatch(/requires approval for every message/)
     const rejected = await call("POST", `/approvals/${held.body.id}/reject`, { reason: "Not now" })
     expect(rejected.body).toMatchObject({ status: "rejected", error: "Rejected: Not now" })
     // Humans are never held.

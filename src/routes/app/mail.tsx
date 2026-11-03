@@ -10,14 +10,16 @@ import { ShortcutsDialog } from "~/components/mail/shortcuts"
 import { ThreadView, type ReplyMode } from "~/components/mail/thread-view"
 import { matchesFolder, useMailActions } from "~/components/mail/use-mail-actions"
 import { Button } from "~/components/ui/button"
+import { QueryError } from "~/components/dashboard/common"
 import { ConfirmDialog } from "~/components/ui/dialog"
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { EmptyState, Kbd } from "~/components/ui/misc"
 import { toast } from "sonner"
 import { useMailList } from "~/components/mail/queries"
 import { api, errorMessage } from "~/lib/api"
-import { useAgents, useThread } from "~/lib/queries"
+import { useAgents, useMe, useThread } from "~/lib/queries"
 import { cn } from "~/lib/utils"
+import { useDocumentTitle } from "~/lib/use-document-title"
 
 export interface MailSearch {
   inbox?: string
@@ -49,7 +51,7 @@ const EMPTY_COPY: Record<FolderId, { title: string; description: string }> = {
   sent: { title: "Nothing sent yet", description: "Messages your agents send — via API, MCP or the composer — land here." },
   drafts: { title: "No drafts", description: "Unsent messages saved from the composer or the drafts API wait here." },
   scheduled: { title: "Nothing scheduled", description: "Messages set to send later appear here until they go out. Cancel one to move it back to Drafts." },
-  pending: { title: "Nothing awaiting approval", description: "When an agent's send policy holds a message for a human to review, it shows up here." },
+  pending: { title: "Nothing held", description: "Mail an agent's send policy holds for review shows up here, along with anything you rejected." },
   archived: { title: "Archive is empty", description: "Archived messages are kept here, out of the inbox." },
   spam: { title: "No spam", description: "Mail flagged as spam or carrying a virus — automatically or by you — lands here." },
   all: { title: "No mail yet", description: "Every message across folders shows up here." }
@@ -61,7 +63,8 @@ function MailPage() {
   const folder: FolderId = search.folder ?? "inbox"
   const compose = useCompose()
   const actions = useMailActions()
-  const { data: agents, isLoading: agentsLoading } = useAgents()
+  const { data: agents, isLoading: agentsLoading, error: agentsError, refetch: refetchAgents } = useAgents()
+  const { data: me } = useMe()
   const [unreadOnly, setUnreadOnly] = useState(false)
   const [query, setQuery] = useState(search.q ?? "")
   const [cursor, setCursor] = useState(0)
@@ -272,6 +275,20 @@ function MailPage() {
   }, [cursor, rows, focused, search.t, folder, actions, openThread, openRow, openReply, targetIds, targetMessage, advanceAfterRemoval])
 
   const folderMeta = FOLDERS.find((f) => f.id === folder)!
+  const totalUnread = (agents ?? []).reduce((sum, a) => sum + a.inboxes.reduce((n, i) => n + i.unreadCount, 0), 0)
+  useDocumentTitle(
+    search.t && thread
+      ? `${thread.subject || "(no subject)"} — AGMX`
+      : `${folderMeta.label}${folder === "inbox" && totalUnread ? ` (${totalUnread})` : ""} — AGMX`
+  )
+
+  if (agentsError && !agents) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <QueryError error={agentsError} onRetry={refetchAgents} what="your inboxes" />
+      </div>
+    )
+  }
 
   if (!agentsLoading && !hasInboxes) {
     return (
@@ -279,7 +296,7 @@ function MailPage() {
         <EmptyState
           icon={<Bot />}
           title="No inboxes yet"
-          description="Create an agent and give it an address like scout@bot.agmx.io. Its mail will show up here in real time."
+          description={`Create an agent and give it an address like scout@${me?.mailDomain ?? "bot.agmx.io"}. Its mail will show up here in real time.`}
           action={
             <Link to="/app/agents" search={{ new: true }}>
               <Button>
@@ -397,6 +414,8 @@ function MailPage() {
         <div role="listbox" aria-label="Messages" className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
           {messages.isLoading ? (
             <ListSkeleton />
+          ) : messages.isError && rows.length === 0 ? (
+            <QueryError error={messages.error} onRetry={() => messages.refetch()} what="messages" />
           ) : rows.length === 0 ? (
             <EmptyState
               icon={search.q ? <Search /> : <folderMeta.icon />}

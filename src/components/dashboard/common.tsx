@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router"
-import { ArrowUpRight, Eye, EyeOff } from "lucide-react"
+import { ArrowUpRight, CloudOff, Eye, EyeOff, RotateCw } from "lucide-react"
 import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
-import { CopyButton } from "~/components/ui/misc"
+import { Button } from "~/components/ui/button"
+import { CopyButton, EmptyState } from "~/components/ui/misc"
 import { ApiFailure } from "~/lib/api"
 import { cn } from "~/lib/utils"
 
@@ -34,6 +35,49 @@ export const Notice = ({ tone = "neutral", children, className }: { tone?: "neut
     {children}
   </div>
 )
+
+/**
+ * A query that failed to load. Shown instead of the empty state, so a network or server error
+ * never reads as "nothing here".
+ */
+export const QueryError = ({
+  error,
+  onRetry,
+  what = "this",
+  className
+}: {
+  error: unknown
+  onRetry: () => unknown
+  what?: string
+  className?: string
+}) => {
+  const [retrying, setRetrying] = useState(false)
+  return (
+    <EmptyState
+      className={className}
+      icon={<CloudOff />}
+      title={`Couldn't load ${what}`}
+      description={error instanceof Error && error.message ? error.message : "Check your connection and try again."}
+      action={
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={retrying}
+          onClick={async () => {
+            setRetrying(true)
+            try {
+              await onRetry()
+            } finally {
+              setRetrying(false)
+            }
+          }}
+        >
+          <RotateCw /> Try again
+        </Button>
+      }
+    />
+  )
+}
 
 export const FailureNote = ({ error, className }: { error: unknown; className?: string }) => {
   if (!error) return null

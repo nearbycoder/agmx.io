@@ -1,5 +1,6 @@
 import { Dialog, DialogContent } from "~/components/ui/dialog"
 import { Kbd } from "~/components/ui/misc"
+import { modKey } from "~/lib/utils"
 
 export const SHORTCUTS: Array<{ group: string; items: Array<[string[], string]> }> = [
   {
@@ -49,7 +50,7 @@ export function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenC
                     <span className="text-ink-2">{label}</span>
                     <span className="flex gap-1">
                       {keys.map((k) => (
-                        <Kbd key={k}>{k}</Kbd>
+                        <Kbd key={k}>{k === "⌘" ? modKey() : k}</Kbd>
                       ))}
                     </span>
                   </div>

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
+import { useDocumentTitle } from "~/lib/use-document-title"
 import {
   ArrowLeft,
   Check,
@@ -21,7 +22,7 @@ import { useCompose } from "~/components/app/compose-context"
 import { Page } from "~/components/app/page"
 import { AgentAvatar } from "~/components/brand"
 import { ColorPicker, type AgentColorName } from "~/components/dashboard/color-picker"
-import { FailureNote, NativeSelect, Notice, origin, SecretField, toastFailure } from "~/components/dashboard/common"
+import { FailureNote, NativeSelect, Notice, origin, QueryError, SecretField, toastFailure } from "~/components/dashboard/common"
 import { Panel, PanelEmpty, Section } from "~/components/dashboard/section"
 import { connectSnippets } from "~/components/dashboard/connect"
 import { CreateKeyDialog } from "~/components/dashboard/create-key-dialog"
@@ -59,15 +60,17 @@ function useInvalidateAgent(agentId: string) {
 
 function AgentPage() {
   const { agentId } = Route.useParams()
-  const { data: agent, isLoading, error } = useAgent(agentId)
+  const { data: agent, isLoading, error, refetch } = useAgent(agentId)
   const invalidate = useInvalidateAgent(agentId)
   const [editing, setEditing] = useState(false)
+  useDocumentTitle(agent ? `${agent.name} — AGMX` : null)
 
   const status = useMutation({
     mutationFn: (next: "active" | "paused") => api((c) => c.agents.update({ params: { agentId }, payload: { status: next } })),
     onSuccess: (a) => {
       invalidate()
-      toast.success(a.status === "paused" ? `${a.name} paused — it won't send or receive` : `${a.name} is active again`)
+      if (a.status === "paused") toast.success(`${a.name} paused`, { description: "It won't send or receive until you resume it." })
+      else toast.success(`${a.name} is active again`)
     },
     onError: (e) => toastFailure(e)
   })
@@ -87,6 +90,14 @@ function AgentPage() {
             </Link>
           }
         />
+      </Page>
+    )
+  }
+
+  if (error && !agent) {
+    return (
+      <Page>
+        <QueryError error={error} onRetry={refetch} what="this agent" />
       </Page>
     )
   }
@@ -149,7 +160,7 @@ function AgentPage() {
             <Pencil /> Edit
           </Button>
           <Button variant="secondary" loading={status.isPending} onClick={() => status.mutate(paused ? "active" : "paused")}>
-            {paused ? <Play /> : <Pause />} {paused ? "Resume" : "Pause"}
+            {paused ? <Play /> : <Pause />} {paused ? "Resume agent" : "Pause agent"}
           </Button>
         </div>
       </div>
@@ -248,6 +259,7 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
   const [rulesFor, setRulesFor] = useState<InboxT | null>(null)
   const invalidate = useInvalidateAgent(agentId)
   const compose = useCompose()
+  const navigate = useNavigate()
   const { data: me } = useMe()
 
   const update = useMutation({
@@ -333,7 +345,7 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
                   <DropdownItem icon={<Send />} onSelect={() => compose.open({ from: inbox.address, subject: `Hello from ${agentName}` })}>
                     Send email from this inbox
                   </DropdownItem>
-                  <DropdownItem icon={<InboxIcon />} onSelect={() => (window.location.href = `/app/mail?inbox=${inbox.id}`)}>
+                  <DropdownItem icon={<InboxIcon />} onSelect={() => void navigate({ to: "/app/mail", search: { inbox: inbox.id } })}>
                     Open in Mail
                   </DropdownItem>
                   <DropdownItem icon={<Filter />} onSelect={() => setRulesFor(inbox)}>
@@ -560,7 +572,7 @@ function WebhookSection({ agentId, webhookUrl, secret }: { agentId: string; webh
   const queryClient = useQueryClient()
   const [url, setUrl] = useState(webhookUrl ?? "")
   const [rotating, setRotating] = useState(false)
-  const { data: deliveries, isLoading } = useDeliveries(agentId)
+  const { data: deliveries, isLoading, error: deliveriesError, refetch: refetchDeliveries } = useDeliveries(agentId)
   useEffect(() => setUrl(webhookUrl ?? ""), [webhookUrl])
   const dirty = (url.trim() || null) !== webhookUrl
 
@@ -586,7 +598,7 @@ function WebhookSection({ agentId, webhookUrl, secret }: { agentId: string; webh
     onSuccess: () => {
       invalidate()
       setRotating(false)
-      toast.success("Signing secret rotated. Update your endpoint.")
+      toast.success("Signing secret rotated", { description: "Update your endpoint to verify with the new secret." })
     },
     onError: (e) => toastFailure(e)
   })
@@ -634,6 +646,10 @@ function WebhookSection({ agentId, webhookUrl, secret }: { agentId: string; webh
       <div className="mt-2 text-[13px] font-medium text-ink-2">Recent deliveries</div>
       {isLoading ? (
         <Skeleton className="h-24 w-full rounded-xl" />
+      ) : deliveriesError && !deliveries ? (
+        <Panel>
+          <QueryError error={deliveriesError} onRetry={refetchDeliveries} what="deliveries" className="py-8" />
+        </Panel>
       ) : deliveries?.length ? (
         <Table className="max-h-80">
           <THead>
@@ -683,7 +699,7 @@ function WebhookSection({ agentId, webhookUrl, secret }: { agentId: string; webh
 // ---------------------------------------------------------------------------
 
 function KeysSection({ agentId }: { agentId: string }) {
-  const { data: keys, isLoading } = useApiKeys()
+  const { data: keys, isLoading, error: keysError, refetch: refetchKeys } = useApiKeys()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null)
@@ -709,6 +725,10 @@ function KeysSection({ agentId }: { agentId: string }) {
     >
       {isLoading ? (
         <Skeleton className="h-16 w-full rounded-xl" />
+      ) : keysError && !keys ? (
+        <Panel>
+          <QueryError error={keysError} onRetry={refetchKeys} what="keys" className="py-8" />
+        </Panel>
       ) : agentKeys.length ? (
         <Panel divided>
           {agentKeys.map((k) => (
@@ -746,7 +766,7 @@ function KeysSection({ agentId }: { agentId: string }) {
         open={revoking !== null}
         onOpenChange={(o) => !o && setRevoking(null)}
         title={`Revoke “${revoking?.name}”?`}
-        description="Anything using this key will immediately start getting 401 Unauthorized."
+        description="Requests using this key will fail with 401 Unauthorized immediately. This can't be undone."
         confirmLabel="Revoke key"
         loading={revoke.isPending}
         onConfirm={() => revoking && revoke.mutate(revoking.id)}
@@ -786,6 +806,10 @@ function DangerZone({ agentId, name }: { agentId: string; name: string }) {
     },
     onError: (e) => toastFailure(e)
   })
+  const close = (next: boolean) => {
+    setOpen(next)
+    if (!next) setConfirm("")
+  }
   return (
     <Section title="Delete agent">
       <Panel className="flex flex-col gap-3 border-danger/25 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -794,30 +818,32 @@ function DangerZone({ agentId, name }: { agentId: string; name: string }) {
           <Trash2 /> Delete agent
         </Button>
       </Panel>
-      <Dialog
-        open={open}
-        onOpenChange={(o) => {
-          setOpen(o)
-          if (!o) setConfirm("")
-        }}
-      >
+      <Dialog open={open} onOpenChange={close}>
         <DialogContent
           title={`Delete ${name}?`}
           description="This permanently deletes every inbox and message this agent owns. It can't be undone."
           footer={
             <>
-              <Button variant="secondary" onClick={() => setOpen(false)}>
+              <Button variant="secondary" onClick={() => close(false)}>
                 Cancel
               </Button>
-              <Button variant="danger" disabled={confirm !== name} loading={remove.isPending} onClick={() => remove.mutate()}>
+              <Button type="submit" form="delete-agent" variant="danger" disabled={confirm !== name} loading={remove.isPending}>
                 {confirm === name ? <Check /> : <Trash2 />} Delete forever
               </Button>
             </>
           }
         >
-          <Field label={<>Type <span className="font-mono font-semibold text-ink">{name}</span> to confirm</>} htmlFor="confirm-delete">
-            <Input id="confirm-delete" autoFocus autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-          </Field>
+          <form
+            id="delete-agent"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (confirm === name && !remove.isPending) remove.mutate()
+            }}
+          >
+            <Field label={<>Type <span className="font-mono font-semibold text-ink">{name}</span> to confirm</>} htmlFor="confirm-delete">
+              <Input id="confirm-delete" autoFocus autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </Field>
+          </form>
         </DialogContent>
       </Dialog>
     </Section>

@@ -36,6 +36,13 @@
       "when": 1793687570396,
       "tag": "0004_agent_reputation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793719890936,
+      "tag": "0005_held_reason",
+      "breakpoints": true
     }
   ]
 }

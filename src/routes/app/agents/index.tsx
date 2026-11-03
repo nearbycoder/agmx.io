@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
-import { Bot, Plus, Search, Webhook } from "lucide-react"
+import { Bot, Plus, Search, ShieldCheck, Webhook } from "lucide-react"
 import { useMemo, useState } from "react"
 import { Page, PageHeader } from "~/components/app/page"
 import { AgentAvatar } from "~/components/brand"
 import { InboxStatusBadge } from "~/components/dashboard/inbox-badges"
 import { CreateAgentDialog } from "~/components/dashboard/create-agent-dialog"
+import { QueryError } from "~/components/dashboard/common"
 import { Panel } from "~/components/dashboard/section"
 import { SignupCallout } from "~/components/dashboard/signup-callout"
 import { Button } from "~/components/ui/button"
@@ -26,7 +27,7 @@ type Filter = "all" | "active" | "paused"
 function AgentsPage() {
   const search = Route.useSearch()
   const navigate = useNavigate({ from: "/app/agents/" })
-  const { data: agents, isLoading } = useAgents()
+  const { data: agents, isLoading, error, refetch } = useAgents()
   const { data: me } = useMe()
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
@@ -52,7 +53,7 @@ function AgentsPage() {
         actions={
           <Tooltip content={atLimit ? `Your ${me?.plan.name} plan allows ${me?.plan.maxAgents} agents` : "Create an agent"}>
             <span>
-              <Button onClick={() => setOpen(true)}>
+              <Button disabled={Boolean(atLimit)} onClick={() => setOpen(true)}>
                 <Plus /> New agent
               </Button>
             </span>
@@ -93,6 +94,10 @@ function AgentsPage() {
               <Skeleton key={i} className="h-40 rounded-xl" />
             ))}
           </div>
+        ) : error && !agents ? (
+          <Panel>
+            <QueryError error={error} onRetry={refetch} what="agents" />
+          </Panel>
         ) : agents?.length === 0 ? (
           <Panel>
             <EmptyState
@@ -101,7 +106,7 @@ function AgentsPage() {
               description={`Create an agent to give it an address like scout@${me?.mailDomain ?? "bot.agmx.io"}, or let your agent sign itself up and approve it here.`}
               action={
                 <Button onClick={() => setOpen(true)}>
-                  <Plus /> Create agent
+                  <Plus /> New agent
                 </Button>
               }
             />
@@ -142,7 +147,7 @@ function AgentCard({ agent }: { agent: AgentT }) {
             <h3 className="truncate text-[14px] font-semibold">{agent.name}</h3>
             {unread ? (
               <span className="flex items-center gap-1 text-[12px] font-medium tabular-nums">
-                <span className="size-1.5 rounded-full bg-accent ring-1 ring-black/10" />
+                <span className="size-1.5 rounded-full bg-accent ring-1 ring-black/10 dark:ring-transparent" />
                 {unread}
               </span>
             ) : null}
@@ -180,11 +185,21 @@ function AgentCard({ agent }: { agent: AgentT }) {
         <span className="tabular-nums">
           {agent.inboxes.length} {agent.inboxes.length === 1 ? "inbox" : "inboxes"} · {messages.toLocaleString()} {messages === 1 ? "message" : "messages"}
         </span>
-        {agent.webhookUrl ? (
-          <Tooltip content="Webhook configured">
-            <Webhook className="size-3.5 text-faint" />
-          </Tooltip>
-        ) : null}
+        <span className="flex items-center gap-2">
+          {agent.sendPolicy !== "auto" ? (
+            <Tooltip content={agent.sendPolicy === "all" ? "You approve every message it sends" : "You approve mail to new contacts"}>
+              <span className="flex items-center gap-1 text-faint">
+                <ShieldCheck className="size-3.5" />
+                {agent.sendPolicy === "all" ? "Approval: all mail" : "Approval: new contacts"}
+              </span>
+            </Tooltip>
+          ) : null}
+          {agent.webhookUrl ? (
+            <Tooltip content="Webhook configured">
+              <Webhook className="size-3.5 text-faint" />
+            </Tooltip>
+          ) : null}
+        </span>
       </div>
     </Link>
   )

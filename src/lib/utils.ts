@@ -31,6 +31,13 @@ export const mailTime = (iso: string) => {
 export const fullDate = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
 
+/** Compact absolute time for message headers: "Nov 2, 11:11 PM", with the year only when it isn't this year. */
+export const messageDate = (iso: string) => {
+  const date = new Date(iso)
+  const sameYear = date.getFullYear() === new Date().getFullYear()
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }), hour: "numeric", minute: "2-digit" })
+}
+
 export const initials = (value: string) =>
   value
     .replace(/@.*/, "")
@@ -41,3 +48,8 @@ export const initials = (value: string) =>
     .join("") || "?"
 
 export const pct = (used: number, max: number | null) => (max === null || max === 0 ? 0 : Math.min(100, Math.round((used / max) * 100)))
+
+const isApplePlatform = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+
+/** The modifier key label for shortcuts: ⌘ on Apple devices, Ctrl elsewhere. Safe to call during render on the client only. */
+export const modKey = () => (isApplePlatform() ? "⌘" : "Ctrl")

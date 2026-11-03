@@ -10,7 +10,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog"
 import { Field, Input } from "~/components/ui/input"
 import { Meter, Skeleton } from "~/components/ui/misc"
 import { api, errorMessage } from "~/lib/api"
-import { authClient } from "~/lib/auth-client"
+import { authClient, signOutAndLeave } from "~/lib/auth-client"
 import { useAgents, useMe } from "~/lib/queries"
 import { useTheme } from "~/lib/theme"
 import { cn, initials } from "~/lib/utils"
@@ -142,15 +142,7 @@ function SettingsPage() {
         <Section title="Session">
           <Panel className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[13px] text-muted">Sign out of AGMX on this device. API keys keep working.</p>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                await authClient.signOut()
-                window.location.href = "/login"
-              }}
-            >
-              <LogOut /> Sign out
-            </Button>
+            <SignOutButton />
           </Panel>
         </Section>
 
@@ -202,7 +194,7 @@ function YourData({ email, isOperator }: { email: string | null; isOperator: boo
               Permanently deletes your account, agents, inboxes, mail, attachments, API keys and custom domains. This can't be undone.
             </p>
           </div>
-          <Button variant="danger" className="shrink-0" disabled={!email} onClick={() => setDeleteOpen(true)}>
+          <Button variant="secondary" className="shrink-0 text-danger" disabled={!email} onClick={() => setDeleteOpen(true)}>
             <Trash2 /> Delete account
           </Button>
         </div>
@@ -230,21 +222,20 @@ function DeleteAccountDialog({ open, onOpenChange, email, isOperator }: { open: 
     }
   }
 
+  const close = (next: boolean) => {
+    if (deleting) return
+    if (!next) setConfirm("")
+    onOpenChange(next)
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (deleting) return
-        if (!next) setConfirm("")
-        onOpenChange(next)
-      }}
-    >
+    <Dialog open={open} onOpenChange={close}>
       <DialogContent
         title="Delete your account?"
         description="Everything is removed right away. Agents using your API keys stop working, and mail sent to your inboxes will bounce."
         footer={
           <>
-            <Button variant="secondary" disabled={deleting} onClick={() => onOpenChange(false)}>
+            <Button variant="secondary" disabled={deleting} onClick={() => close(false)}>
               Cancel
             </Button>
             <Button variant="danger" loading={deleting} disabled={!matches} onClick={submit}>
@@ -281,10 +272,14 @@ const Usage = ({ label, hint, hintTone, used, max }: { label: ReactNode; hint?: 
       <div className="text-muted">{label}</div>
       {hint ? <div className={cn("text-[12px]", hintTone === "warn" ? "text-warn" : "text-faint")}>{hint}</div> : null}
     </div>
-    {max !== null ? <Meter value={used} max={max} className="hidden w-28 sm:block" /> : null}
-    <span className="w-36 shrink-0 text-right tabular-nums">
-      {used.toLocaleString()} <span className="text-muted">{max === null ? "· no limit" : `of ${max.toLocaleString()}`}</span>
-    </span>
+    {max ? <Meter value={used} max={max} className="hidden w-28 sm:block" /> : null}
+    {max === 0 && used === 0 ? (
+      <span className="w-36 shrink-0 text-right text-muted">Not on this plan</span>
+    ) : (
+      <span className="w-36 shrink-0 text-right tabular-nums">
+        {used.toLocaleString()} <span className="text-muted">{max === null ? "· no limit" : `of ${max.toLocaleString()}`}</span>
+      </span>
+    )}
   </div>
 )
 
@@ -308,4 +303,23 @@ const ThemePreview = ({ mode }: { mode: "light" | "dark" | "system" }) => {
     </div>
   )
   return <div className="flex h-20">{mode === "system" ? <>{pane(false)}{pane(true)}</> : pane(mode === "dark")}</div>
+}
+
+function SignOutButton() {
+  const [pending, setPending] = useState(false)
+  return (
+    <Button
+      variant="secondary"
+      loading={pending}
+      onClick={async () => {
+        setPending(true)
+        if (!(await signOutAndLeave())) {
+          setPending(false)
+          toast.error("Couldn't sign out. Check your connection and try again.")
+        }
+      }}
+    >
+      <LogOut /> Sign out
+    </Button>
+  )
 }

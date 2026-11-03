@@ -9,7 +9,7 @@ import { Skeleton, Switch } from "~/components/ui/misc"
 import { api } from "~/lib/api"
 import type { InboxRuleT, InboxT } from "~/shared/api/domain"
 import { cn } from "~/lib/utils"
-import { FailureNote, NativeSelect, toastFailure } from "./common"
+import { FailureNote, NativeSelect, QueryError, toastFailure } from "./common"
 import { dk, useInboxRules } from "./queries"
 
 type Field_ = InboxRuleT["field"]
@@ -42,7 +42,7 @@ const describeAction = (r: InboxRuleT) => {
 export function InboxRulesDialog({ inbox, onOpenChange }: { inbox: InboxT | null; onOpenChange: (open: boolean) => void }) {
   const queryClient = useQueryClient()
   const inboxId = inbox?.id ?? ""
-  const { data: rules, isLoading } = useInboxRules(inboxId, Boolean(inbox))
+  const { data: rules, isLoading, error, refetch } = useInboxRules(inboxId, Boolean(inbox))
   const [field, setField] = useState<Field_>("domain")
   const [value, setValue] = useState("")
   const [action, setAction] = useState<Action>("allow")
@@ -121,6 +121,8 @@ export function InboxRulesDialog({ inbox, onOpenChange }: { inbox: InboxT | null
                 <Skeleton className="h-5 w-2/3" />
                 <Skeleton className="h-5 w-1/2" />
               </div>
+            ) : error && !rules ? (
+              <QueryError error={error} onRetry={refetch} what="rules" className="py-8" />
             ) : rules?.length ? (
               <ol className="divide-y divide-line">
                 {rules.map((r, i) => (
@@ -132,7 +134,7 @@ export function InboxRulesDialog({ inbox, onOpenChange }: { inbox: InboxT | null
                       <span className="text-muted"> → </span>
                       <span className={cn("font-medium", r.action === "block" && "text-danger")}>{describeAction(r)}</span>
                     </div>
-                    <Switch checked={r.enabled} onCheckedChange={() => toggle.mutate(r)} />
+                    <Switch checked={r.enabled} onCheckedChange={() => toggle.mutate(r)} aria-label={r.enabled ? "Disable rule" : "Enable rule"} />
                     <button
                       type="button"
                       onClick={() => remove.mutate(r)}

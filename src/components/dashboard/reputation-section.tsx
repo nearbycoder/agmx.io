@@ -30,7 +30,7 @@ function useSendingMutations(agentId: string) {
     mutationFn: () => api((c) => c.agents.resumeSending({ params: { agentId } })),
     onSuccess: () => {
       refresh()
-      toast.success("Sending resumed. Reputation starts fresh from now.")
+      toast.success("Sending resumed", { description: "Bounce and complaint rates are measured fresh from now." })
     },
     onError: (e) => toastFailure(e)
   })
@@ -38,7 +38,7 @@ function useSendingMutations(agentId: string) {
     mutationFn: () => api((c) => c.agents.pauseSending({ params: { agentId }, payload: {} })),
     onSuccess: () => {
       refresh()
-      toast.success("Sending paused. The agent can still receive mail.")
+      toast.success("Sending paused", { description: "The agent can still receive mail." })
     },
     onError: (e) => toastFailure(e)
   })
@@ -92,6 +92,7 @@ export function ReputationSection({ agent }: { agent: AgentT }) {
         <RateStat
           label="Hard bounces"
           count={data?.bounced}
+          sent={data?.sent}
           rate={data?.bounceRate}
           limit={data?.thresholds.bounceRate}
           note={data ? `Pauses at ${pct(data.thresholds.bounceRate)} (min ${data.thresholds.minBounces})` : ""}
@@ -99,6 +100,7 @@ export function ReputationSection({ agent }: { agent: AgentT }) {
         <RateStat
           label="Spam complaints"
           count={data?.complained}
+          sent={data?.sent}
           rate={data?.complaintRate}
           limit={data?.thresholds.complaintRate}
           note={data ? `Pauses at ${pct(data.thresholds.complaintRate)} (min ${data.thresholds.minComplaints})` : ""}
@@ -128,7 +130,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function RateStat({ label, count, rate, limit, note }: { label: string; count?: number; rate?: number; limit?: number; note: string }) {
+function RateStat({ label, count, sent, rate, limit, note }: { label: string; count?: number; sent?: number; rate?: number; limit?: number; note: string }) {
   const level = rate !== undefined && limit ? rate / limit : 0
   return (
     <div className="px-5 py-4">
@@ -137,7 +139,7 @@ function RateStat({ label, count, rate, limit, note }: { label: string; count?: 
         <span className={cn("text-[20px] font-semibold tracking-[-0.02em] tabular-nums", level >= 1 ? "text-danger" : level >= 0.6 && "text-warn")}>
           {rate === undefined ? "–" : pct(rate)}
         </span>
-        <span className="text-[12px] text-muted tabular-nums">{count === undefined ? "" : count.toLocaleString()}</span>
+        <span className="text-[12px] text-muted tabular-nums">{count === undefined || sent === undefined ? "" : `${count.toLocaleString()} of ${sent.toLocaleString()}`}</span>
       </div>
       <Meter value={Math.min(level, 1) * 100} max={100} className="mt-2" />
       <div className="mt-1.5 text-[11.5px] text-faint">{note}</div>

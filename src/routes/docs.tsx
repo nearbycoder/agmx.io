@@ -1,6 +1,6 @@
 import { seo, siteUrlFrom } from "~/lib/seo"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react"
+import { ArrowDown, ArrowUpRight, BookOpen, ChevronDown } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { Callout, DocTable, Endpoint, Params } from "~/components/marketing/docs-kit"
 import { MarketingFooter } from "~/components/marketing/footer"
@@ -163,7 +163,7 @@ function DocsPage() {
                 <a key={c.href} href={c.href} className="group rounded-xl border border-line bg-surface p-4 !no-underline transition-colors hover:border-line-strong">
                   <div className="flex items-center justify-between text-[14px] font-semibold">
                     {c.title}
-                    <ArrowUpRight className="size-4 text-faint transition group-hover:text-ink" />
+                    <ArrowDown className="size-4 text-faint transition group-hover:translate-y-0.5 group-hover:text-ink" />
                   </div>
                   <p className="mt-1 text-[13px] text-muted">{c.body}</p>
                 </a>
@@ -433,7 +433,7 @@ const message = await res.json() // full Message, status "sent"`
             <li>At most 50 recipients per message.</li>
             <li>
               <strong>Approvals:</strong> if the sending agent's <a href="#approvals">send policy</a> requires review, the message comes back with status{" "}
-              <code>pending_approval</code> and is sent once a human approves it.
+              <code>pending_approval</code> and a <code>heldReason</code> explaining why. It's sent once a human approves it.
             </li>
           </ul>
 

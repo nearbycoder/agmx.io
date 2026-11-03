@@ -286,6 +286,8 @@ export const messages = pgTable(
     safeText: text("safe_text"),
     idempotencyKey: text("idempotency_key"),
     sendAt: timestamp("send_at", { withTimezone: true }),
+    /** Why the agent's send policy held this message for approval (set while pending, kept after a decision). */
+    heldReason: text("held_reason"),
     decidedBy: text("decided_by"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     verdicts: jsonb("verdicts").$type<Verdicts>().notNull().default({}),

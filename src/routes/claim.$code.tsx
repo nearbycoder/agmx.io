@@ -140,13 +140,18 @@ function ClaimPage() {
               <AgentAvatar name={data.agentName} color="slate" size="lg" />
               <div className="min-w-0 flex-1">
                 <h1 className="truncate text-[18px] font-semibold tracking-[-0.01em]">{data.agentName}</h1>
-                <p className="text-[13.5px] text-muted">
-                  wants an email inbox on your account · <span className="tabular-nums">expires in {remaining}</span>
-                </p>
+                <p className="text-[13.5px] text-muted">wants an email inbox on your account</p>
+                <p className="mt-0.5 text-[12px] text-faint tabular-nums">Request expires in {remaining}</p>
                 {data.description ? <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">{data.description}</p> : null}
               </div>
             </div>
-            <div className="flex flex-col gap-5 p-6">
+            <form
+              className="flex flex-col gap-5 p-6"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!problem && !approve.isPending && !deny.isPending) approve.mutate()
+              }}
+            >
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[13px] text-muted">Check this code matches the one your agent showed you</span>
                 <code className="shrink-0 font-mono text-[16px] font-semibold tracking-[0.1em]">{data.userCode}</code>
@@ -177,14 +182,14 @@ function ClaimPage() {
               </ul>
               <FailureNote error={approve.error ?? deny.error} />
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="secondary" size="lg" loading={deny.isPending} disabled={approve.isPending} onClick={() => deny.mutate()}>
+                <Button type="button" variant="secondary" size="lg" loading={deny.isPending} disabled={approve.isPending} onClick={() => deny.mutate()}>
                   Deny
                 </Button>
-                <Button size="lg" loading={approve.isPending} disabled={Boolean(problem) || deny.isPending} onClick={() => approve.mutate()}>
+                <Button type="submit" size="lg" loading={approve.isPending} disabled={Boolean(problem) || deny.isPending}>
                   Approve
                 </Button>
               </div>
-            </div>
+            </form>
           </>
         ) : null}
       </div>

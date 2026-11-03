@@ -181,6 +181,8 @@ export class Account extends Context.Service<Account, {
 
         adminUpdateUser: Effect.fn("Account.adminUpdateUser")(function* (principal, userId, patch) {
           yield* requireAdmin(principal)
+          if (patch.role === "user" && userId === principal.userId)
+            return yield* new Forbidden({ message: "You can't remove your own operator role. Ask another operator to do it." })
           const set: Partial<typeof user.$inferInsert> = {}
           if (patch.plan) set.plan = patch.plan
           if (patch.role) set.role = patch.role

@@ -79,6 +79,7 @@ export const toMessageSummary = (row: MessageRow, attachmentCount = 0): typeof D
   extracted: normalizeExtracted(row.extracted),
   security: row.security,
   sendAt: isoOrNull(row.sendAt),
+  heldReason: row.heldReason ?? null,
   labels: row.labels,
   isRead: row.isRead,
   isStarred: row.isStarred,

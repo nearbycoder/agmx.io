@@ -97,3 +97,9 @@ export const isEmailAllowed = (email: string): boolean => {
 }
 
 export const isAdminEmail = (email: string) => env.adminEmails.includes(email.trim().toLowerCase())
+
+/** Whether an address is one of the operator's RFC 2142 role mailboxes (abuse@, postmaster@…). */
+export const isSystemAddress = (address: string) => {
+  const at = address.lastIndexOf("@")
+  return address.slice(at + 1).toLowerCase() === env.contactDomain && env.systemInboxes.includes(address.slice(0, at).toLowerCase())
+}

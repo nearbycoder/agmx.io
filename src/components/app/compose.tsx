@@ -11,7 +11,8 @@ import { ConfirmDialog } from "~/components/ui/dialog"
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { api, ApiFailure } from "~/lib/api"
 import { qk, useAgents } from "~/lib/queries"
-import { cn, formatBytes } from "~/lib/utils"
+import { cn, formatBytes, modKey } from "~/lib/utils"
+import { formatWhen } from "~/components/mail/queries"
 import { useCompose, type ComposeDraft } from "./compose-context"
 
 const MAX_TOTAL_BYTES = 10 * 1024 * 1024
@@ -51,8 +52,6 @@ const schedulePresets = () => [
   { label: "Tomorrow morning", at: atHour(1, 9) },
   { label: "Monday morning", at: nextMonday9() }
 ]
-
-const whenLabel = (d: Date) => d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
 
 /** `datetime-local` value for a Date, in local time. */
 const toLocalInput = (d: Date) => {
@@ -196,14 +195,14 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
       refresh()
       const folder = message.status === "scheduled" ? "scheduled" : message.status === "pending_approval" ? "pending" : "sent"
       const view = { label: "View", onClick: () => void navigate({ to: "/app/mail", search: { folder, t: message.threadId } }) }
-      if (message.status === "scheduled") toast.success(message.sendAt ? `Scheduled for ${whenLabel(new Date(message.sendAt))}` : "Scheduled", { description: message.subject || undefined, action: view })
+      if (message.status === "scheduled") toast.success(message.sendAt ? `Scheduled for ${formatWhen(message.sendAt)}` : "Scheduled", { description: message.subject || undefined, action: view })
       else if (message.status === "pending_approval") toast("Waiting for approval", { description: "This agent's send policy holds the message until a human approves it.", action: view })
       else if (message.status === "failed") toast.error("Message failed to send", { description: message.error ?? undefined, action: view })
       else toast.success("Sent", { description: message.subject || undefined, action: view })
       onClose()
     },
     onError: (e) => {
-      if (e instanceof ApiFailure && e.tag === "QuotaExceeded") setError(`Quota reached — ${e.message}`)
+      if (e instanceof ApiFailure && e.tag === "QuotaExceeded") setError(`Plan limit reached. ${e.message}`)
       else setError(e instanceof Error ? e.message : "Couldn't send the message.")
     }
   })
@@ -448,6 +447,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                     onClick={() => setShowQuoted((v) => !v)}
                     className="inline-flex h-5 items-center rounded-md px-1.5 text-[12px] text-muted ring-1 ring-line transition-colors hover:text-ink hover:ring-line-strong"
                     aria-label={showQuoted ? "Hide quoted message" : "Show quoted message"}
+                    title={showQuoted ? undefined : "Show quoted message"}
                   >
                     {showQuoted ? "Hide original" : "•••"}
                   </button>
@@ -524,7 +524,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
               <div className="flex">
                 <Button onClick={() => submit()} loading={send.isPending} className="rounded-r-none">
                   Send
-                  <span className="ml-0.5 hidden font-mono text-[11px] opacity-50 sm:inline">⌘↵</span>
+                  <span className="ml-0.5 hidden font-mono text-[11px] opacity-50 sm:inline">{modKey() === "⌘" ? "⌘↵" : "Ctrl ↵"}</span>
                 </Button>
                 <DropdownMenu>
                   <DropdownTrigger asChild>
@@ -538,7 +538,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                       <DropdownItem key={p.label} icon={<Clock />} onSelect={() => submit(p.at)}>
                         <span className="flex w-full items-baseline justify-between gap-3 whitespace-nowrap">
                           {p.label}
-                          <span className="text-[11.5px] text-muted tabular-nums">{whenLabel(p.at)}</span>
+                          <span className="text-[11.5px] text-muted tabular-nums">{formatWhen(p.at.toISOString())}</span>
                         </span>
                       </DropdownItem>
                     ))}
@@ -559,7 +559,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                 </Tooltip>
               ) : null}
               {canSaveDraft ? (
-                <Tooltip content={<span className="flex items-center gap-1.5">Save draft<span className="font-mono text-[11px] opacity-60">⌘S</span></span>}>
+                <Tooltip content={<span className="flex items-center gap-1.5">Save draft<span className="font-mono text-[11px] opacity-60">{modKey() === "⌘" ? "⌘S" : "Ctrl S"}</span></span>}>
                   <Button variant="ghost" size="icon-sm" onClick={() => saveDraft.mutate()} loading={saveDraft.isPending} aria-label="Save draft" disabled={send.isPending}>
                     {saveDraft.isPending ? null : <Save />}
                   </Button>
@@ -700,7 +700,7 @@ function RecipientInput({
             title={valid ? v : "Invalid address"}
           >
             <span className="truncate">{v}</span>
-            <button onClick={() => onChange(values.filter((x) => x !== v))} className="rounded p-0.5 opacity-60 hover:bg-black/5 hover:opacity-100" aria-label={`Remove ${v}`}>
+            <button onClick={() => onChange(values.filter((x) => x !== v))} className="rounded p-0.5 opacity-60 hover:bg-ink/10 hover:opacity-100" aria-label={`Remove ${v}`}>
               <X className="size-3" />
             </button>
           </span>

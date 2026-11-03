@@ -15,20 +15,22 @@ import {
   PenSquare,
   Search,
   Settings,
-  Shield,
+  ServerCog,
   ShieldCheck,
   Sun
 } from "lucide-react"
 import { useState, type ReactNode } from "react"
+import { toast } from "sonner"
 import { Logo } from "~/components/brand"
 import { Button } from "~/components/ui/button"
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { Kbd, Meter } from "~/components/ui/misc"
-import { authClient } from "~/lib/auth-client"
+import { signOutAndLeave } from "~/lib/auth-client"
 import { useApprovals } from "~/components/dashboard/queries"
 import { useAgents, useMe, useSignupRequests } from "~/lib/queries"
 import type { SessionUser } from "~/lib/session"
 import { useTheme } from "~/lib/theme"
+import { useModKey } from "~/lib/use-mod-key"
 import { cn, initials } from "~/lib/utils"
 import { CommandPalette, useCommandPalette } from "./command-palette"
 import { useCompose } from "./compose-context"
@@ -46,6 +48,7 @@ const NAV = [
 export function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const palette = useCommandPalette()
+  const compose = useCompose()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const isMail = pathname.startsWith("/app/mail")
 
@@ -67,16 +70,21 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
       </DialogPrimitive.Root>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-bg/80 px-4 backdrop-blur lg:hidden">
-          <Button variant="ghost" size="icon-sm" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
+        <header className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-bg/80 px-4 backdrop-blur lg:hidden">
+          <Button variant="ghost" size="icon-sm" onClick={() => setMobileOpen(true)} aria-label="Open navigation" className="justify-self-start">
             <Menu />
           </Button>
           <Link to="/app">
             <Logo />
           </Link>
-          <Button variant="ghost" size="icon-sm" onClick={() => palette.setOpen(true)} aria-label="Search">
-            <Search />
-          </Button>
+          <div className="flex items-center justify-self-end gap-1">
+            <Button variant="ghost" size="icon-sm" onClick={() => palette.setOpen(true)} aria-label="Search">
+              <Search />
+            </Button>
+            <Button variant="ghost" size="icon-sm" onClick={() => compose.open()} aria-label="Compose">
+              <PenSquare />
+            </Button>
+          </div>
         </header>
         <main className={cn("min-h-0 flex-1", isMail ? "overflow-hidden" : "scrollbar-thin overflow-y-auto")}>{children}</main>
       </div>
@@ -86,6 +94,7 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 }
 
 function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate?: () => void; onSearch: () => void }) {
+  const mod = useModKey()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const { data: me } = useMe()
   const { data: agents } = useAgents()
@@ -94,7 +103,7 @@ function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate
   const held = approvals?.length ?? 0
   const compose = useCompose()
   const unread = agents?.reduce((sum, a) => sum + a.inboxes.reduce((s, i) => s + i.unreadCount, 0), 0) ?? 0
-  const items = [...NAV, ...(user.role === "admin" ? [{ to: "/app/admin", label: "Operator", icon: Shield } as const] : [])]
+  const items = [...NAV, ...(user.role === "admin" ? [{ to: "/app/admin", label: "Operator", icon: ServerCog } as const] : [])]
   const sendLimit = me?.plan.monthlySends ?? null
 
   return (
@@ -126,7 +135,7 @@ function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate
         >
           <Search className="size-4" />
           Search
-          <span className="ml-auto font-sans text-[11.5px] text-faint">⌘K</span>
+          <span className="ml-auto font-sans text-[11.5px] text-faint">{mod === "⌘" ? "⌘K" : "Ctrl K"}</span>
         </button>
       </div>
 
@@ -135,6 +144,7 @@ function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate
           const active = "exact" in item && item.exact ? pathname === item.to || pathname === `${item.to}/` : pathname.startsWith(item.to)
           const count = item.label === "Mail" && unread > 0 ? unread : null
           const pending = item.label === "Agents" && (signups?.length ?? 0) > 0
+          const sendingPaused = item.label === "Agents" ? (agents?.filter((a) => a.sendingPaused).length ?? 0) : 0
           return (
             <Link
               key={item.to}
@@ -155,7 +165,11 @@ function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate
                   <span className="ml-auto rounded-md bg-warn-soft px-1.5 text-[11.5px] font-medium text-warn tabular-nums">{held}</span>
                 </Tooltip>
               ) : null}
-              {pending ? (
+              {sendingPaused > 0 ? (
+                <Tooltip content={`Sending is paused for ${sendingPaused} agent${sendingPaused === 1 ? "" : "s"}`}>
+                  <span className="ml-auto size-1.5 rounded-full bg-danger" />
+                </Tooltip>
+              ) : pending ? (
                 <Tooltip content={`${signups!.length} sign-up request${signups!.length === 1 ? "" : "s"} waiting`}>
                   <span className="ml-auto size-1.5 rounded-full bg-warn" />
                 </Tooltip>
@@ -235,8 +249,7 @@ function UserMenu({ user }: { user: SessionUser }) {
         <DropdownItem
           icon={<LogOut />}
           onSelect={async () => {
-            await authClient.signOut()
-            window.location.href = "/login"
+            if (!(await signOutAndLeave())) toast.error("Couldn't sign out. Check your connection and try again.")
           }}
         >
           Sign out
