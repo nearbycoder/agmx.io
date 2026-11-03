@@ -100,7 +100,15 @@ function OverviewPage() {
             icon={<Inbox />}
             loading={meLoading}
             value={(me?.usage.receivedThisMonth ?? 0).toLocaleString()}
-            hint="Receiving is unlimited"
+            used={me?.usage.receivedThisMonth}
+            max={me?.plan.monthlyReceives}
+            hint={
+              me
+                ? me.usage.droppedThisMonth > 0
+                  ? `${me.usage.droppedThisMonth.toLocaleString()} dropped over limit`
+                  : `limit ${formatLimit(me.plan.monthlyReceives)}`
+                : undefined
+            }
           />
           <StatCard
             label="Stored messages"

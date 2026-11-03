@@ -8,6 +8,7 @@ import { Agents } from "../services/Agents"
 import { Domains } from "../services/Domains"
 import { Mail } from "../services/Mail"
 import { Signups } from "../services/Signups"
+import { Storage } from "../services/Storage"
 import { Webhooks } from "../services/Webhooks"
 
 const ok = { ok: true } as const
@@ -66,6 +67,7 @@ const MessagesHandlers = HttpApiBuilder.group(
   "messages",
   Effect.fn(function* (handlers) {
     const mail = yield* Mail
+    const storage = yield* Storage
     const withPrincipal = Effect.service(CurrentPrincipal)
     return handlers
       .handle("list", ({ query }) => Effect.flatMap(withPrincipal, (p) => mail.list(p, query)))
@@ -85,7 +87,16 @@ const MessagesHandlers = HttpApiBuilder.group(
           // and sandboxed, so a malicious attachment can never execute on the AGMX origin.
           const safeInline = /^(image\/(png|jpe?g|gif|webp|avif)|application\/pdf|text\/plain)$/i.test(file.contentType)
           const inline = safeInline && new URL(request.url, "http://x").searchParams.get("inline") === "1"
-          return HttpServerResponse.uint8Array(new Uint8Array(file.content), {
+          if (file.storageKey) {
+            // Object storage: hand the client a short-lived signed URL so bytes skip the app entirely.
+            const url = yield* storage.signedUrl(file.storageKey, {
+              filename: file.filename,
+              contentType: safeInline ? file.contentType : "application/octet-stream",
+              inline
+            })
+            return HttpServerResponse.redirect(url, { status: 302, headers: { "cache-control": "private, max-age=60" } })
+          }
+          return HttpServerResponse.uint8Array(new Uint8Array(file.content ?? Buffer.alloc(0)), {
             contentType: safeInline ? file.contentType : "application/octet-stream",
             headers: {
               "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(file.filename)}`,

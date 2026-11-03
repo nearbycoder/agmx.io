@@ -9,9 +9,10 @@ import { Mail } from "./services/Mail"
 import { MailTransport } from "./services/MailTransport"
 import { Quota } from "./services/Quota"
 import { Signups } from "./services/Signups"
+import { Storage } from "./services/Storage"
 import { Webhooks } from "./services/Webhooks"
 
-const Infra = Layer.mergeAll(Db.layer, MailTransport.layer, Events.layer)
+const Infra = Layer.mergeAll(Db.layer, MailTransport.layer, Events.layer, Storage.layer)
 const QuotaLive = Quota.layer.pipe(Layer.provide(Infra))
 const AgentsLive = Agents.layer.pipe(Layer.provide([Infra, QuotaLive]))
 const WebhooksLive = Webhooks.layer.pipe(Layer.provide([Infra, AgentsLive]))

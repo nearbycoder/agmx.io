@@ -39,7 +39,7 @@ export const toAgent = (row: AgentRow, inboxes: ReadonlyArray<typeof D.Inbox.Typ
 export const attachmentUrl = (messageId: string, attachmentId: string) =>
   `${env.appUrl}/api/v1/messages/${messageId}/attachments/${attachmentId}`
 
-export const toAttachment = (row: Omit<AttachmentRow, "content" | "userId" | "createdAt">): typeof D.AttachmentMeta.Type => ({
+export const toAttachment = (row: Omit<AttachmentRow, "content" | "storageKey" | "userId" | "createdAt">): typeof D.AttachmentMeta.Type => ({
   id: row.id,
   filename: row.filename,
   contentType: row.contentType,
@@ -72,7 +72,7 @@ export const toMessageSummary = (row: MessageRow, attachmentCount = 0): typeof D
 
 export const toMessage = (
   row: MessageRow,
-  attachments: ReadonlyArray<Omit<AttachmentRow, "content" | "userId" | "createdAt">>
+  attachments: ReadonlyArray<Omit<AttachmentRow, "content" | "storageKey" | "userId" | "createdAt">>
 ): typeof D.Message.Type => ({
   ...toMessageSummary(row, attachments.length),
   bcc: row.bcc,

@@ -15,6 +15,10 @@ export interface Plan {
   readonly monthlySends: number | null
   /** Outbound emails per calendar day (UTC). Protects sender reputation. */
   readonly dailySends: number | null
+  /** Inbound emails accepted per calendar month (UTC); extra mail is dropped. */
+  readonly monthlyReceives: number | null
+  /** Largest accepted inbound message. */
+  readonly maxInboundMb: number
   /** Custom sending/receiving domains. */
   readonly customDomains: number | null
   /** Days messages are retained before automatic cleanup. */
@@ -40,10 +44,12 @@ export const PLANS: Record<PlanId, Plan> = {
     inboxesPerAgent: 1,
     monthlySends: 300,
     dailySends: 50,
+    monthlyReceives: 5_000,
+    maxInboundMb: 10,
     customDomains: 0,
     retentionDays: 30,
     maxMessageMb: 10,
-    features: ["2 agents", "1 inbox per agent", "300 sends / month", "Unlimited receiving", "REST API, MCP & webhooks", "30-day retention"]
+    features: ["2 agents", "1 inbox per agent", "300 sends / month", "5,000 received / month", "REST API, MCP & webhooks", "30-day retention"]
   },
   pro: {
     id: "pro",
@@ -54,11 +60,13 @@ export const PLANS: Record<PlanId, Plan> = {
     inboxesPerAgent: 5,
     monthlySends: 10_000,
     dailySends: 1_000,
+    monthlyReceives: 100_000,
+    maxInboundMb: 25,
     customDomains: 3,
     retentionDays: 180,
     maxMessageMb: 25,
     highlight: true,
-    features: ["15 agents", "5 inboxes per agent", "10,000 sends / month", "3 custom domains", "Signed webhooks with retries", "180-day retention"]
+    features: ["15 agents", "5 inboxes per agent", "10,000 sends / month", "100,000 received / month", "3 custom domains", "Signed webhooks with retries", "180-day retention"]
   },
   scale: {
     id: "scale",
@@ -69,10 +77,12 @@ export const PLANS: Record<PlanId, Plan> = {
     inboxesPerAgent: 25,
     monthlySends: 150_000,
     dailySends: 15_000,
+    monthlyReceives: 1_000_000,
+    maxInboundMb: 40,
     customDomains: 25,
     retentionDays: 365,
     maxMessageMb: 40,
-    features: ["250 agents", "25 inboxes per agent", "150,000 sends / month", "25 custom domains", "Webhooks, MCP & REST", "1-year retention"]
+    features: ["250 agents", "25 inboxes per agent", "150,000 sends / month", "1M received / month", "25 custom domains", "Webhooks, MCP & REST", "1-year retention"]
   },
   unlimited: {
     id: "unlimited",
@@ -83,6 +93,8 @@ export const PLANS: Record<PlanId, Plan> = {
     inboxesPerAgent: null,
     monthlySends: null,
     dailySends: null,
+    monthlyReceives: null,
+    maxInboundMb: 40,
     customDomains: null,
     retentionDays: null,
     maxMessageMb: 40,

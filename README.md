@@ -20,7 +20,8 @@
 - **MCP server** at `/mcp` (Streamable HTTP) with 13 tools: `wait_for_email`, `send_email`, `reply_to_email` and more.
 - **Webhooks** for `message.received`, `message.sent`, `message.delivered`, `message.bounced` and `message.complained`. Deliveries are HMAC-signed and retried with backoff.
 - **Custom domains.** SES identity with DKIM. Shows the exact DNS records to publish and verifies them.
-- **Plans & quotas.** Agents, inboxes per agent, daily and monthly sends, custom domains, retention, and message size. Defined in [`src/shared/plans.ts`](src/shared/plans.ts).
+- **Plans & quotas.** Agents, inboxes per agent, daily and monthly sends, monthly receives, inbound and outbound message size, custom domains, and retention. Mail over the receive limits is dropped and counted. Defined in [`src/shared/plans.ts`](src/shared/plans.ts).
+- **Cheap at scale.** Attachments live in S3-compatible object storage (S3, R2, MinIO) and download through signed URLs; raw inbound mail is deleted from the intake bucket the moment it's stored. Postgres holds only metadata and text.
 - **Deliverability hygiene.** Hard bounces and complaints go on a suppression list. SPF/DKIM/DMARC and spam/virus verdicts are stored on every inbound message.
 - **Invite-only access.** An email allow-list (`ALLOWED_EMAILS`) is enforced at sign-up, sign-in, and every new session.
 
@@ -88,8 +89,9 @@ Pick a region that supports **email receiving** (e.g. `us-east-1`, `us-west-2`, 
 3. **Create an SNS topic** (e.g. `agmx-inbound`). Add an **HTTPS subscription** to `https://<your-host>/api/inbound/ses`. AGMX verifies the signature and confirms the subscription automatically.
 4. **Receipt rule.** In *SES → Email receiving → Rule sets*, create and **activate** a rule set. Add a rule for your domain with an **SNS action** targeting the topic, encoding **Base64**. SNS can carry up to 150 KB of mail per message. For larger mail, use an **S3 action** with that SNS topic as its notification. AGMX then fetches the object, which needs `s3:GetObject` on the bucket.
 5. **Delivery feedback (recommended).** Create a configuration set with an event destination for *Bounce, Complaint, Delivery* that publishes to an SNS topic subscribed to the same URL. Set `SES_CONFIGURATION_SET`.
-6. **IAM user** for the app, with `ses:SendEmail`, `ses:SendRawEmail`, `ses:GetAccount`, `ses:CreateEmailIdentity`, `ses:GetEmailIdentity`, `ses:DeleteEmailIdentity` (plus `ses:DescribeReceiptRule`/`ses:UpdateReceiptRule` if you use `SES_RECEIPT_RULE*`, and `s3:GetObject` for S3 actions). Put its keys in `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
-7. **Leave the sandbox.** Request production access in *SES → Account dashboard*. Until then SES only delivers to verified addresses.
+6. **Attachment bucket (recommended).** Create a private bucket and set `ATTACHMENT_STORAGE=s3` and `STORAGE_BUCKET`. For Cloudflare R2, also set `STORAGE_ENDPOINT` and R2 keys in `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY`.
+7. **IAM user** for the app, with `ses:SendEmail`, `ses:SendRawEmail`, `ses:GetAccount`, `ses:CreateEmailIdentity`, `ses:GetEmailIdentity` and `ses:DeleteEmailIdentity`. Add `ses:DescribeReceiptRule`/`ses:UpdateReceiptRule` if you use `SES_RECEIPT_RULE*`, `s3:GetObject` + `s3:DeleteObject` on the inbound bucket, and `s3:PutObject`/`GetObject`/`DeleteObject` on the attachment bucket. Put its keys in `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`.
+8. **Leave the sandbox.** Request production access in *SES → Account dashboard*. Until then SES only delivers to verified addresses.
 
 The *Operator* page in the dashboard (`/app/admin`) shows live SES account status, the inbound webhook URL and a setup checklist.
 

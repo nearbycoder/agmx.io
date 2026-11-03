@@ -43,6 +43,19 @@ export const env = {
     receiptRuleSet: read("SES_RECEIPT_RULE_SET"),
     receiptRule: read("SES_RECEIPT_RULE")
   },
+  /**
+   * Where attachment bytes live. `s3` = any S3-compatible bucket (AWS S3, Cloudflare R2, MinIO);
+   * `db` = Postgres (zero-config, fine for development and small installs).
+   */
+  storage: {
+    driver: ((read("ATTACHMENT_STORAGE") ?? (read("STORAGE_BUCKET") ? "s3" : "db")) as "s3" | "db"),
+    bucket: read("STORAGE_BUCKET"),
+    region: read("STORAGE_REGION") ?? read("AWS_REGION") ?? "us-east-1",
+    /** Custom endpoint for R2/MinIO, e.g. https://<account>.r2.cloudflarestorage.com */
+    endpoint: read("STORAGE_ENDPOINT"),
+    accessKeyId: read("STORAGE_ACCESS_KEY_ID") ?? read("AWS_ACCESS_KEY_ID"),
+    secretAccessKey: read("STORAGE_SECRET_ACCESS_KEY") ?? read("AWS_SECRET_ACCESS_KEY")
+  },
   /** `ses` sends real mail. `log` prints mail to the console (local development). */
   mailTransport: (read("MAIL_TRANSPORT") ?? (hasAwsCredentials ? "ses" : "log")) as "ses" | "log",
   systemFrom: read("SYSTEM_FROM") ?? `AGMX <no-reply@${mailDomain}>`,

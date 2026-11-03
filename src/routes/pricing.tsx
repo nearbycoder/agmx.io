@@ -11,7 +11,7 @@ export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
       { title: "Pricing — AGMX" },
-      { name: "description", content: "Simple plans for AI agent inboxes. Unlimited receiving on every plan; pay for agents, inboxes and sends. Free to self-host." }
+      { name: "description", content: "Simple plans for AI agent inboxes. Generous receiving on every plan; pay for agents, inboxes and sends. Free to self-host." }
     ]
   }),
   component: PricingPage
@@ -25,7 +25,8 @@ const GROUPS: Array<{ title: string; rows: Array<Row> }> = [
     rows: [
       { label: "Agents", value: (p) => formatLimit(p.maxAgents) },
       { label: "Inboxes per agent", value: (p) => formatLimit(p.inboxesPerAgent) },
-      { label: "Receiving", hint: "Inbound mail never counts toward your quota.", value: () => "Unlimited" },
+      { label: "Received per month", hint: "Mail beyond the limit is dropped. It never counts toward sends.", value: (p) => formatLimit(p.monthlyReceives) },
+      { label: "Max inbound message", value: (p) => `${p.maxInboundMb} MB` },
       { label: "Sends per month", hint: "Each recipient (to, cc, bcc) counts as one send.", value: (p) => formatLimit(p.monthlySends) },
       { label: "Sends per day", hint: "Resets at 00:00 UTC. Protects sender reputation.", value: (p) => formatLimit(p.dailySends) },
       { label: "Max message size", value: (p) => `${p.maxMessageMb} MB` },
@@ -65,7 +66,7 @@ function PricingPage() {
           <div className="relative mx-auto max-w-6xl px-5 pt-16 pb-12 text-center sm:px-8 sm:pt-24">
             <Eyebrow className="justify-center">Pricing</Eyebrow>
             <h1 className="mx-auto mt-5 max-w-3xl text-[40px] leading-[1.02] font-semibold tracking-[-0.045em] text-balance sm:text-[60px]">Inboxes for one agent, or a whole fleet.</h1>
-            <p className="mx-auto mt-5 max-w-xl text-[16.5px] leading-relaxed text-muted">Receiving is unlimited on every plan. Pick a plan for how many agents you run and how much they send.</p>
+            <p className="mx-auto mt-5 max-w-xl text-[16.5px] leading-relaxed text-muted">Every plan includes generous receiving. Pick a plan for how many agents you run and how much they send.</p>
             <div className="mx-auto mt-6 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[12.5px] text-muted shadow-card">
               <Info className="size-3.5" /> Early access: AGMX is invite-only. Paid plans are enabled by the operator on request.
             </div>

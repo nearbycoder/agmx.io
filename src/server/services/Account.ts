@@ -1,14 +1,15 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm"
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schedule } from "effect"
 import type { Principal } from "~/shared/api/Authorization"
 import type * as D from "~/shared/api/domain"
 import { Forbidden, NotFound } from "~/shared/api/errors"
 import { PLANS, getPlan, type Plan } from "~/shared/plans"
-import { agentSignups, agents, domains, inboxes, messages, threads, usageDaily, user } from "../db/schema"
+import { agentSignups, agents, domains, inboxes, messages, storageDeletions, threads, usageDaily, user } from "../db/schema"
 import { env } from "../env"
 import { requireAdmin } from "./access"
 import { Db } from "./Db"
 import { MailTransport } from "./MailTransport"
+import { Storage } from "./Storage"
 import { Quota, utcMonthStart } from "./Quota"
 
 const planLimits = (plan: Plan): typeof D.PlanLimits.Type => ({
@@ -19,6 +20,8 @@ const planLimits = (plan: Plan): typeof D.PlanLimits.Type => ({
   inboxesPerAgent: plan.inboxesPerAgent,
   monthlySends: plan.monthlySends,
   dailySends: plan.dailySends,
+  monthlyReceives: plan.monthlyReceives,
+  maxInboundMb: plan.maxInboundMb,
   customDomains: plan.customDomains,
   retentionDays: plan.retentionDays,
   maxMessageMb: plan.maxMessageMb
@@ -107,6 +110,7 @@ export class Account extends Context.Service<Account, {
               sentToday: usage.sentToday,
               sentThisMonth: usage.sentThisMonth,
               receivedThisMonth: usage.receivedThisMonth,
+              droppedThisMonth: usage.droppedThisMonth,
               messagesStored: counts?.messagesStored ?? 0
             },
             mailDomain: env.mailDomain,
@@ -194,6 +198,27 @@ export class Account extends Context.Service<Account, {
         Effect.delay("30 seconds"),
         Effect.forkScoped
       )
+
+      // Delete object-storage files for attachments removed from the database (queued by a trigger).
+      const storage = yield* Storage
+      const drain = Effect.gen(function* () {
+        while (true) {
+          const batch = yield* db.use((d) => d.select({ key: storageDeletions.key }).from(storageDeletions).limit(500))
+          if (batch.length === 0) return
+          const keys = batch.map((b) => b.key)
+          yield* storage.remove(keys)
+          yield* db.use((d) => d.delete(storageDeletions).where(inArray(storageDeletions.key, keys)))
+          if (batch.length < 500) return
+        }
+      })
+      if (storage.driver === "s3") {
+        yield* drain.pipe(
+          Effect.catchCause((cause) => Effect.logError("Storage cleanup failed", cause)),
+          Effect.repeat(Schedule.spaced("1 minute")),
+          Effect.delay("20 seconds"),
+          Effect.forkScoped
+        )
+      }
     })
   )
 }

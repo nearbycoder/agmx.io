@@ -74,7 +74,7 @@ GET ${origin}/api/v1/me
 Authorization: Bearer agmx_…
 \`\`\`
 
-Returns your plan limits (\`plan.monthlySends\`, \`plan.dailySends\`, \`plan.inboxesPerAgent\`, …), current usage and \`auth.agentId\`.
+Returns your plan limits (\`plan.monthlySends\`, \`plan.dailySends\`, \`plan.monthlyReceives\`, \`plan.maxInboundMb\`, \`plan.inboxesPerAgent\`, …), current usage and \`auth.agentId\`. Incoming mail over \`monthlyReceives\` or larger than \`maxInboundMb\` is dropped (counted in \`usage.droppedThisMonth\`).
 
 \`\`\`http
 GET ${origin}/api/v1/inboxes

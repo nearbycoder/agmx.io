@@ -669,7 +669,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
             Plans & limits
           </H2>
           <p>
-            Limits are enforced per account. Receiving is unlimited on every plan; daily limits reset at 00:00 UTC and monthly limits on the 1st. See{" "}
+            Limits are enforced per account. Received mail has its own monthly limit (it never counts as sends) and mail over the limit or the plan’s max inbound size is dropped; daily limits reset at 00:00 UTC and monthly limits on the 1st. See{" "}
             <Link to="/pricing">pricing</Link> for the numbers, or call <code>GET /me</code> for your own plan and usage, and <code>GET /usage?days=30</code> for a daily series.
           </p>
           <ul>

@@ -18,6 +18,7 @@ import { Db } from "./Db"
 import { Events } from "./Events"
 import { MailTransport } from "./MailTransport"
 import { Quota } from "./Quota"
+import { Storage } from "./Storage"
 import { Webhooks } from "./Webhooks"
 
 export interface ListFilters {
@@ -87,7 +88,11 @@ export class Mail extends Context.Service<Mail, {
   get(principal: Principal, messageId: string, markRead?: boolean): Effect.Effect<typeof D.Message.Type, NotFound>
   update(principal: Principal, messageId: string, patch: typeof D.UpdateMessagePayload.Type): Effect.Effect<typeof D.MessageSummary.Type, NotFound>
   remove(principal: Principal, messageId: string): Effect.Effect<void, NotFound>
-  attachment(principal: Principal, messageId: string, attachmentId: string): Effect.Effect<{ filename: string; contentType: string; content: Buffer }, NotFound>
+  attachment(
+    principal: Principal,
+    messageId: string,
+    attachmentId: string
+  ): Effect.Effect<{ filename: string; contentType: string; content: Buffer | null; storageKey: string | null }, NotFound>
   send(principal: Principal, input: OutgoingInput): Effect.Effect<typeof D.Message.Type, SendError>
   reply(principal: Principal, messageId: string, input: typeof D.ReplyPayload.Type): Effect.Effect<typeof D.Message.Type, SendError>
   forward(principal: Principal, messageId: string, input: typeof D.ForwardPayload.Type): Effect.Effect<typeof D.Message.Type, SendError>
@@ -111,6 +116,47 @@ export class Mail extends Context.Service<Mail, {
       const events = yield* Events
       const webhooks = yield* Webhooks
       const agentsService = yield* Agents
+      const storage = yield* Storage
+
+      /**
+       * Upload attachment bytes to object storage (when configured) and build the
+       * rows to insert. Runs before the DB transaction; the returned `cleanup`
+       * removes uploaded objects if the transaction later fails.
+       */
+      const prepareAttachments = (
+        userId: string,
+        messageId: string,
+        files: ReadonlyArray<{ filename: string; contentType: string; content: Buffer; contentId?: string | null; inline?: boolean }>
+      ) =>
+        Effect.gen(function* () {
+          const rows = yield* Effect.forEach(
+            files,
+            (f) =>
+              Effect.gen(function* () {
+                const id = newId("att")
+                const storageKey = yield* storage.put(`attachments/${userId}/${messageId}/${id}`, f.content, f.contentType)
+                return {
+                  id,
+                  userId,
+                  messageId,
+                  filename: f.filename,
+                  contentType: f.contentType,
+                  size: f.content.byteLength,
+                  contentId: f.contentId ?? null,
+                  inline: f.inline ?? false,
+                  content: storageKey ? null : f.content,
+                  storageKey
+                }
+              }),
+            { concurrency: 4 }
+          )
+          const keys = rows.flatMap((r) => (r.storageKey ? [r.storageKey] : []))
+          return { rows, cleanup: storage.remove(keys) }
+        })
+
+      /** Attachment bytes, wherever they are stored. */
+      const attachmentBytes = (row: { content: Buffer | null; storageKey: string | null }) =>
+        row.content ? Effect.succeed(row.content) : storage.get(row.storageKey!)
 
       // ---------------------------------------------------------------------
       // Helpers
@@ -247,8 +293,15 @@ export class Mail extends Context.Service<Mail, {
         parsed: ParsedEmail,
         options: { tag: string | null; verdicts: Verdicts }
       ) {
+        const admission = yield* quota.admitInbound(inbox.userId, parsed.sizeBytes)
+        if (!admission.ok) {
+          yield* quota.recordDropped(inbox.userId, 1)
+          yield* Effect.logWarning(`Dropped inbound mail for ${inbox.address} from ${parsed.from.address}: ${admission.reason}`)
+          return null
+        }
         const messageId = newId("msg")
         const isSpam = options.verdicts.spam === "FAIL" || options.verdicts.virus === "FAIL"
+        const prepared = yield* prepareAttachments(inbox.userId, messageId, parsed.attachments)
         const threadId = yield* db.transaction(
           Effect.gen(function* () {
             const threadId = yield* resolveThread(inbox, parsed)
@@ -280,29 +333,13 @@ export class Mail extends Context.Service<Mail, {
                 sizeBytes: parsed.sizeBytes
               })
             )
-            if (parsed.attachments.length) {
-              yield* db.use((d) =>
-                d.insert(attachments).values(
-                  parsed.attachments.map((a) => ({
-                    id: newId("att"),
-                    userId: inbox.userId,
-                    messageId,
-                    filename: a.filename,
-                    contentType: a.contentType,
-                    size: a.content.byteLength,
-                    contentId: a.contentId,
-                    inline: a.inline,
-                    content: a.content
-                  }))
-                )
-              )
-            }
+            if (prepared.rows.length) yield* db.use((d) => d.insert(attachments).values(prepared.rows))
             yield* refreshThread(threadId)
             yield* db.use((d) => d.update(inboxes).set({ lastMessageAt: new Date() }).where(eq(inboxes.id, inbox.id)))
             yield* quota.recordReceived(inbox.userId, 1)
             return threadId
           })
-        )
+        ).pipe(Effect.onError(() => prepared.cleanup))
         yield* events.publish({ type: "message.received", userId: inbox.userId, inboxId: inbox.id, messageId, threadId })
         const [row] = yield* db.use((d) => d.select().from(messages).where(eq(messages.id, messageId)))
         if (row && !isSpam) {
@@ -329,8 +366,8 @@ export class Mail extends Context.Service<Mail, {
             yield* Effect.logInfo(`Dropping mail for paused inbox ${match.inbox.address}`)
             continue
           }
-          yield* deliverToInbox(match.inbox, parsed, { tag: match.tag, verdicts })
-          inboxIds.push(match.inbox.id)
+          const delivered = yield* deliverToInbox(match.inbox, parsed, { tag: match.tag, verdicts })
+          if (delivered) inboxIds.push(match.inbox.id)
         }
         return { delivered: inboxIds.length, inboxIds }
       })
@@ -433,6 +470,7 @@ export class Mail extends Context.Service<Mail, {
         }
 
         const messageId = newId("msg")
+        const prepared = yield* prepareAttachments(inbox.userId, messageId, files)
         const threadId = yield* db.transaction(
           Effect.gen(function* () {
             yield* quota.reserveSends(inbox.userId, allRecipients.length)
@@ -467,26 +505,12 @@ export class Mail extends Context.Service<Mail, {
                 sizeBytes: raw.byteLength
               })
             )
-            if (files.length) {
-              yield* db.use((d) =>
-                d.insert(attachments).values(
-                  files.map((f) => ({
-                    id: newId("att"),
-                    userId: inbox.userId,
-                    messageId,
-                    filename: f.filename,
-                    contentType: f.contentType,
-                    size: f.content.byteLength,
-                    content: f.content
-                  }))
-                )
-              )
-            }
+            if (prepared.rows.length) yield* db.use((d) => d.insert(attachments).values(prepared.rows))
             yield* refreshThread(threadId)
             yield* db.use((d) => d.update(inboxes).set({ lastMessageAt: new Date() }).where(eq(inboxes.id, inbox.id)))
             return threadId
           })
-        )
+        ).pipe(Effect.onError(() => prepared.cleanup))
 
         let providerMessageId: string | null = null
         if (external.length) {
@@ -638,7 +662,7 @@ export class Mail extends Context.Service<Mail, {
           yield* requireMessage(principal, messageId)
           const [row] = yield* db.use((d) =>
             d
-              .select({ filename: attachments.filename, contentType: attachments.contentType, content: attachments.content })
+              .select({ filename: attachments.filename, contentType: attachments.contentType, content: attachments.content, storageKey: attachments.storageKey })
               .from(attachments)
               .where(and(eq(attachments.id, attachmentId), eq(attachments.messageId, messageId)))
               .limit(1)
@@ -689,11 +713,14 @@ export class Mail extends Context.Service<Mail, {
           const original = yield* requireMessage(principal, messageId)
           const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, original.inboxId)).limit(1))
           if (!inbox) return yield* new NotFound({ message: "Inbox not found.", resource: "inbox" })
-          const files = yield* db.use((d) =>
+          const stored = yield* db.use((d) =>
             d
-              .select({ filename: attachments.filename, contentType: attachments.contentType, content: attachments.content })
+              .select({ filename: attachments.filename, contentType: attachments.contentType, content: attachments.content, storageKey: attachments.storageKey })
               .from(attachments)
               .where(eq(attachments.messageId, original.id))
+          )
+          const files = yield* Effect.forEach(stored, (f) =>
+            attachmentBytes(f).pipe(Effect.map((content) => ({ filename: f.filename, contentType: f.contentType, content })))
           )
           const header = [
             "---------- Forwarded message ---------",

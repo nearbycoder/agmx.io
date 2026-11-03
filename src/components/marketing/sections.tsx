@@ -507,6 +507,7 @@ const planRows = (plan: Plan) => [
   ["Inboxes per agent", formatLimit(plan.inboxesPerAgent)],
   ["Sends / month", formatLimit(plan.monthlySends)],
   ["Sends / day", formatLimit(plan.dailySends)],
+  ["Received / month", formatLimit(plan.monthlyReceives)],
   ["Custom domains", plan.customDomains === 0 ? "—" : formatLimit(plan.customDomains)],
   ["Retention", plan.retentionDays === null ? "Forever" : `${plan.retentionDays} days`]
 ]
@@ -558,7 +559,7 @@ export function PricingCards({ compact }: { compact?: boolean }) {
                   </div>
                 ))}
                 <div className="mt-2 flex flex-col gap-2 border-t border-line pt-4">
-                  {["Unlimited receiving", "REST API, MCP & webhooks", `${plan.maxMessageMb} MB max message`].map((f) => (
+                  {["Receiving included", "REST API, MCP & webhooks", `${plan.maxMessageMb} MB max message`].map((f) => (
                     <div key={f} className="flex items-center gap-2.5 text-[13.5px] text-ink-2">
                       <Check className="size-4 shrink-0 text-accent-ink" /> {f}
                     </div>
@@ -632,7 +633,7 @@ export const FAQS = [
   },
   {
     q: "What counts toward my send quota?",
-    a: "Each recipient of an outbound message counts as one send (to, cc and bcc). Receiving is unlimited on every plan. Daily limits reset at 00:00 UTC, monthly limits on the 1st."
+    a: "Each recipient of an outbound message counts as one send (to, cc and bcc). Received mail has its own, much larger monthly allowance. Daily limits reset at 00:00 UTC, monthly limits on the 1st."
   },
   {
     q: "Can I use my own domain?",

@@ -71,6 +71,7 @@ function SettingsPage() {
                   <Usage label="Inboxes per agent (largest)" used={maxInboxes} max={me.plan.inboxesPerAgent} />
                   <Usage label="Sends today" used={me.usage.sentToday} max={me.plan.dailySends} />
                   <Usage label="Sends this month" used={me.usage.sentThisMonth} max={me.plan.monthlySends} />
+                  <Usage label="Received this month" used={me.usage.receivedThisMonth} max={me.plan.monthlyReceives} />
                   <Usage label="Custom domains" used={me.usage.domains} max={me.plan.customDomains} />
                   <div className="flex flex-col gap-2">
                     <div className="text-[13px] text-muted">Limits</div>
@@ -82,8 +83,13 @@ function SettingsPage() {
                         Max message <b className="font-semibold">{me.plan.maxMessageMb} MB</b>
                       </span>
                       <span className="rounded-lg border border-line bg-surface-2 px-2 py-1">
-                        Receiving <b className="font-semibold">unlimited</b>
+                        Max inbound <b className="font-semibold">{me.plan.maxInboundMb} MB</b>
                       </span>
+                      {me.usage.droppedThisMonth > 0 ? (
+                        <span className="rounded-lg border border-warn/30 bg-warn-soft px-2 py-1 text-warn">
+                          Dropped this month <b className="font-semibold">{me.usage.droppedThisMonth.toLocaleString()}</b>
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>

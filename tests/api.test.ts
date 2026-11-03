@@ -209,3 +209,39 @@ describe("operator domain", () => {
     }
   })
 })
+
+describe("inbound limits", () => {
+  it("drops mail over the monthly receive limit and counts it", async () => {
+    const inboxes = (await call("GET", "/inboxes")).body as Array<{ address: string; id: string }>
+    const [from, to] = inboxes
+    const pg = postgres(url, { max: 1 })
+    await pg`update usage_daily set received = 100000, sent = 0 where user_id = ${ownerId}`
+    await pg.end()
+    const before = (await call("GET", `/messages?inboxId=${to!.id}&folder=inbox`)).body.messages.length
+    const sent = await call("POST", "/messages", { from: from!.address, to: to!.address, subject: "Over the limit", text: "hi" })
+    expect(sent.body.status).toBe("sent")
+    const after = (await call("GET", `/messages?inboxId=${to!.id}&folder=inbox`)).body.messages.length
+    expect(after).toBe(before)
+    const me = await call("GET", "/me")
+    expect(me.body.usage.droppedThisMonth).toBe(1)
+    expect(me.body.plan.monthlyReceives).toBe(100_000)
+  })
+
+  it("rejects messages larger than the plan's inbound size", async () => {
+    const [{ runtime }, { Quota }] = await Promise.all([import("~/server/runtime"), import("~/server/services/Quota")])
+    const result = await runtime.runPromise(Effect.flatMap(Effect.service(Quota), (q) => q.admitInbound(ownerId, 60 * 1024 * 1024)))
+    expect(result.ok).toBe(false)
+  })
+})
+
+describe("attachment storage cleanup", () => {
+  it("queues object keys for deletion when attachment rows disappear", async () => {
+    const pg = postgres(url, { max: 1 })
+    const [msg] = await pg`select id from messages where user_id = ${ownerId} limit 1`
+    await pg`insert into attachments (id, user_id, message_id, filename, content_type, size, storage_key) values ('att_t', ${ownerId}, ${msg!.id}, 'a.txt', 'text/plain', 1, 'attachments/test/key')`
+    await call("DELETE", `/messages/${msg!.id}`)
+    const [queued] = await pg`select key from storage_deletions where key = 'attachments/test/key'`
+    expect(queued?.key).toBe("attachments/test/key")
+    await pg.end()
+  })
+})

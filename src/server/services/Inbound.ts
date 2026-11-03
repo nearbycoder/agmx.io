@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3"
+import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { Context, Effect, Layer } from "effect"
 import { suppressions } from "../db/schema"
 import { env } from "../env"
@@ -79,6 +79,13 @@ export class Inbound extends Context.Service<Inbound, {
             dkim: receipt.dkimVerdict?.status ?? null,
             dmarc: receipt.dmarcVerdict?.status ?? null
           })
+          // The message is safely stored now; drop the raw copy instead of paying to keep it.
+          if (receipt.action.type === "S3" && receipt.action.bucketName && receipt.action.objectKey) {
+            const { bucketName, objectKey } = receipt.action
+            yield* Effect.tryPromise(() => s3.send(new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey }))).pipe(
+              Effect.catch((error) => Effect.logWarning(`Could not delete raw inbound object ${objectKey}`, error))
+            )
+          }
           yield* Effect.logInfo(
             `Inbound mail ${note.mail.messageId} (${raw.byteLength} bytes) for ${receipt.recipients.join(", ")} → delivered to ${result.delivered} inbox(es)`
           )

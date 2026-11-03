@@ -24,6 +24,8 @@ export const PlanLimits = Schema.Struct({
   inboxesPerAgent: Schema.NullOr(Schema.Number),
   monthlySends: Schema.NullOr(Schema.Number),
   dailySends: Schema.NullOr(Schema.Number),
+  monthlyReceives: Schema.NullOr(Schema.Number),
+  maxInboundMb: Schema.Number,
   customDomains: Schema.NullOr(Schema.Number),
   retentionDays: Schema.NullOr(Schema.Number),
   maxMessageMb: Schema.Number
@@ -36,6 +38,8 @@ export const UsageSummary = Schema.Struct({
   sentToday: Schema.Number,
   sentThisMonth: Schema.Number,
   receivedThisMonth: Schema.Number,
+  /** Inbound messages dropped this month for exceeding plan limits. */
+  droppedThisMonth: Schema.Number,
   messagesStored: Schema.Number
 })
 

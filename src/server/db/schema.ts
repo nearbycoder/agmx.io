@@ -262,7 +262,10 @@ export const attachments = pgTable(
     size: integer("size").notNull(),
     contentId: text("content_id"),
     inline: boolean("inline").notNull().default(false),
-    content: bytea("content").notNull(),
+    /** File bytes when stored in Postgres (local/dev). Null when the file lives in object storage. */
+    content: bytea("content"),
+    /** Object-storage key when ATTACHMENT_STORAGE=s3. */
+    storageKey: text("storage_key"),
     createdAt: createdAt()
   },
   (t) => [index("attachments_message_idx").on(t.messageId)]
@@ -294,7 +297,9 @@ export const usageDaily = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     day: date("day", { mode: "string" }).notNull(),
     sent: integer("sent").notNull().default(0),
-    received: integer("received").notNull().default(0)
+    received: integer("received").notNull().default(0),
+    /** Inbound messages dropped for exceeding the plan's receive or size limits. */
+    dropped: integer("dropped").notNull().default(0)
   },
   (t) => [primaryKey({ columns: [t.userId, t.day] })]
 )
@@ -360,3 +365,9 @@ export const suppressions = pgTable(
   },
   (t) => [uniqueIndex("suppressions_address_idx").on(sql`lower(${t.address})`)]
 )
+
+/** Object-storage keys whose attachments were deleted; drained by the maintenance worker. Filled by a trigger. */
+export const storageDeletions = pgTable("storage_deletions", {
+  key: text("key").primaryKey(),
+  createdAt: createdAt()
+})

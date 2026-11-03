@@ -12,6 +12,7 @@ export interface SendUsage {
   readonly sentToday: number
   readonly sentThisMonth: number
   readonly receivedThisMonth: number
+  readonly droppedThisMonth: number
 }
 
 /**
@@ -30,6 +31,9 @@ export class Quota extends Context.Service<Quota, {
   reserveSends(userId: string, recipients: number): Effect.Effect<void, QuotaExceeded>
   refundSends(userId: string, recipients: number): Effect.Effect<void>
   recordReceived(userId: string, count: number): Effect.Effect<void>
+  /** Whether an inbound message of `bytes` fits the account's monthly receive and size limits. */
+  admitInbound(userId: string, bytes: number): Effect.Effect<{ ok: true } | { ok: false; reason: string }>
+  recordDropped(userId: string, count: number): Effect.Effect<void>
 }>()("agmx/services/Quota") {
   static readonly layer = Layer.effect(
     Quota,
@@ -48,12 +52,13 @@ export class Quota extends Context.Service<Quota, {
               .select({
                 sentToday: sql<number>`coalesce(sum(case when ${usageDaily.day} = ${utcDay()} then ${usageDaily.sent} else 0 end), 0)::int`,
                 sentThisMonth: sql<number>`coalesce(sum(${usageDaily.sent}), 0)::int`,
-                receivedThisMonth: sql<number>`coalesce(sum(${usageDaily.received}), 0)::int`
+                receivedThisMonth: sql<number>`coalesce(sum(${usageDaily.received}), 0)::int`,
+                droppedThisMonth: sql<number>`coalesce(sum(${usageDaily.dropped}), 0)::int`
               })
               .from(usageDaily)
               .where(and(eq(usageDaily.userId, userId), gte(usageDaily.day, utcMonthStart())))
           )
-          .pipe(Effect.map((rows) => rows[0] ?? { sentToday: 0, sentThisMonth: 0, receivedThisMonth: 0 }))
+          .pipe(Effect.map((rows) => rows[0] ?? { sentToday: 0, sentThisMonth: 0, receivedThisMonth: 0, droppedThisMonth: 0 }))
 
       const exceeded = (limit: QuotaExceeded["limit"], max: number, used: number, message: string) =>
         Effect.fail(new QuotaExceeded({ limit, max, used, message }))
@@ -141,6 +146,29 @@ export class Quota extends Context.Service<Quota, {
                 .update(usageDaily)
                 .set({ sent: sql`greatest(${usageDaily.sent} - ${recipients}, 0)` })
                 .where(and(eq(usageDaily.userId, userId), eq(usageDaily.day, utcDay())))
+            )
+            .pipe(Effect.asVoid),
+
+        admitInbound: (userId, bytes) =>
+          Effect.gen(function* () {
+            const plan = yield* planFor(userId)
+            if (bytes > plan.maxInboundMb * 1024 * 1024)
+              return { ok: false, reason: `message is ${(bytes / 1024 / 1024).toFixed(1)} MB; the ${plan.name} plan accepts up to ${plan.maxInboundMb} MB` } as const
+            if (plan.monthlyReceives !== null) {
+              const current = yield* usage(userId)
+              if (current.receivedThisMonth >= plan.monthlyReceives)
+                return { ok: false, reason: `monthly receive limit reached (${plan.monthlyReceives.toLocaleString()} on ${plan.name})` } as const
+            }
+            return { ok: true } as const
+          }),
+
+        recordDropped: (userId, n) =>
+          db
+            .use((d) =>
+              d
+                .insert(usageDaily)
+                .values({ userId, day: utcDay(), dropped: n })
+                .onConflictDoUpdate({ target: [usageDaily.userId, usageDaily.day], set: { dropped: sql`${usageDaily.dropped} + ${n}` } })
             )
             .pipe(Effect.asVoid),
 

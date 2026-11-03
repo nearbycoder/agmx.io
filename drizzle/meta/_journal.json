@@ -8,6 +8,20 @@
       "when": 1793672391631,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793677282785,
+      "tag": "0001_attachment_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793677283044,
+      "tag": "0002_storage_deletion_trigger",
+      "breakpoints": true
     }
   ]
 }
