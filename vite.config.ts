@@ -38,7 +38,7 @@ export default defineConfig({
     tanstackStart({
       router: { routeFileIgnorePattern: "\\.(test|spec)\\." }
     }),
-    nitro(),
+    nitro({ preset: "node-server" }),
     viteReact()
   ]
 })
