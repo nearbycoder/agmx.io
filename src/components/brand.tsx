@@ -1,15 +1,15 @@
-import { BRAND, glyphSvg } from "~/brand/mark"
+import { BRAND, scaledGlyph } from "~/brand/mark"
 import { cn, initials } from "~/lib/utils"
 
 export const LogoMark = ({ className, title }: { className?: string; title?: string }) => (
   <svg
-    viewBox="0 0 32 32"
+    viewBox="0 0 16 16"
     className={cn("size-7 shrink-0", className)}
     role={title ? "img" : undefined}
     aria-hidden={title ? undefined : true}
     aria-label={title}
     dangerouslySetInnerHTML={{
-      __html: `<rect width="32" height="32" rx="8" fill="${BRAND.ink}"/><rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="none" stroke="#fff" stroke-opacity="0.1"/>${glyphSvg()}`
+      __html: `<rect width="16" height="16" rx="3.75" fill="${BRAND.lime}"/>${scaledGlyph(0.9)}`
     }}
   />
 )
