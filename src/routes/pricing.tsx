@@ -1,9 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { Check, Info, Minus } from "lucide-react"
+import { Check, Minus } from "lucide-react"
 import { MarketingFooter } from "~/components/marketing/footer"
 import { MarketingHeader } from "~/components/marketing/header"
-import { Eyebrow, Faq, PricingCards, SelfHostBanner } from "~/components/marketing/sections"
-import { Button } from "~/components/ui/button"
+import { CONTAINER, Faq, PricingCards, SelfHostNote } from "~/components/marketing/sections"
 import { cn } from "~/lib/utils"
 import { formatLimit, PLANS, type Plan } from "~/shared/plans"
 
@@ -11,7 +10,7 @@ export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
       { title: "Pricing — AGMX" },
-      { name: "description", content: "Simple plans for AI agent inboxes. Generous receiving on every plan; pay for agents, inboxes and sends. Free to self-host." }
+      { name: "description", content: "Simple plans for AI agent inboxes, priced by agents, inboxes and mail volume. Free to self-host." }
     ]
   }),
   component: PricingPage
@@ -61,88 +60,85 @@ function PricingPage() {
     <div className="min-h-screen overflow-x-clip bg-bg">
       <MarketingHeader />
       <main>
-        <section className="relative">
-          <div className="grid-bg pointer-events-none absolute inset-x-0 -top-16 h-[520px] opacity-50 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,black,transparent)]" />
-          <div className="relative mx-auto max-w-6xl px-5 pt-16 pb-12 text-center sm:px-8 sm:pt-24">
-            <Eyebrow className="justify-center">Pricing</Eyebrow>
-            <h1 className="mx-auto mt-5 max-w-3xl text-[40px] leading-[1.02] font-semibold tracking-[-0.045em] text-balance sm:text-[60px]">Inboxes for one agent, or a whole fleet.</h1>
-            <p className="mx-auto mt-5 max-w-xl text-[16.5px] leading-relaxed text-muted">Every plan includes generous receiving. Pick a plan for how many agents you run and how much they send.</p>
-            <div className="mx-auto mt-6 inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[12.5px] text-muted shadow-card">
-              <Info className="size-3.5" /> Early access: AGMX is invite-only. Paid plans are enabled by the operator on request.
-            </div>
+        <section>
+          <div className={cn(CONTAINER, "pt-16 pb-14 text-center sm:pt-24 sm:pb-16")}>
+            <h1 className="mx-auto max-w-3xl text-5xl leading-[1.02] font-semibold tracking-[-0.04em] text-balance sm:text-6xl">Inboxes for one agent, or a whole fleet.</h1>
+            <p className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-muted text-pretty">
+              Pick a plan for how many agents you run and how much mail they send and receive. Every plan includes the full API, MCP server and webhooks.
+            </p>
+            <p className="mx-auto mt-5 max-w-xl text-[13px] text-muted">AGMX is in invite-only early access. Paid plans are enabled by the operator on request.</p>
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-5 pb-6 sm:px-8">
-          <PricingCards />
-          <SelfHostBanner className="mt-4" />
+        <section>
+          <div className={cn(CONTAINER, "pb-6")}>
+            <PricingCards />
+            <SelfHostNote className="mt-4" />
+          </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8">
-          <h2 className="text-[28px] font-semibold tracking-[-0.03em]">Compare plans</h2>
-          <div className="mt-8 overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
-            <table className="w-full min-w-[640px] table-fixed border-collapse text-[13.5px]">
-              <colgroup>
-                <col className="w-[40%]" />
-                {plans.map((p) => (
-                  <col key={p.id} />
-                ))}
-              </colgroup>
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="px-5 py-4 text-left font-medium text-muted">Plan</th>
+        <section>
+          <div className={cn(CONTAINER, "py-24 sm:py-28")}>
+            <h2 className="text-3xl leading-[1.1] font-semibold tracking-[-0.03em] sm:text-4xl">Compare plans</h2>
+            <div className="scrollbar-thin mt-10 overflow-x-auto rounded-xl border border-line bg-surface">
+              <table className="w-full min-w-[640px] table-fixed border-collapse text-[13.5px]">
+                <colgroup>
+                  <col className="w-[40%]" />
                   {plans.map((p) => (
-                    <th key={p.id} className="px-5 py-4 text-left">
-                      <div className="flex items-center gap-2 text-[15px] font-semibold">
-                        {p.name}
-                        {p.highlight ? <span className="rounded-full bg-accent px-1.5 py-px text-[10.5px] font-semibold text-accent-fg">Popular</span> : null}
-                      </div>
-                      <div className="mt-0.5 font-normal text-muted">${p.priceMonthly}/mo</div>
-                    </th>
+                    <col key={p.id} />
                   ))}
-                </tr>
-              </thead>
-              {GROUPS.map((group) => (
-                <tbody key={group.title}>
-                  <tr>
-                    <td colSpan={plans.length + 1} className="bg-surface-2 px-5 py-2.5 text-[11.5px] font-medium tracking-wider text-faint uppercase">
-                      {group.title}
-                    </td>
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-line">
+                    <th className="px-5 py-4 text-left align-bottom text-[12px] font-medium text-muted">Plan</th>
+                    {plans.map((p) => (
+                      <th key={p.id} className="px-5 py-4 text-left align-bottom">
+                        <div className="text-[14px] font-semibold">{p.name}</div>
+                        <div className="mt-0.5 text-[13px] font-normal text-muted tabular-nums">${p.priceMonthly} / month</div>
+                      </th>
+                    ))}
                   </tr>
-                  {group.rows.map((row) => (
-                    <tr key={row.label} className="border-t border-line">
-                      <td className="px-5 py-3.5">
-                        <div className="font-medium text-ink-2">{row.label}</div>
-                        {row.hint ? <div className="mt-0.5 text-[12px] text-muted">{row.hint}</div> : null}
+                </thead>
+                {GROUPS.map((group) => (
+                  <tbody key={group.title}>
+                    <tr className="border-b border-line bg-bg-subtle/60">
+                      <td colSpan={plans.length + 1} className="px-5 py-2.5 text-[12px] font-medium text-muted">
+                        {group.title}
                       </td>
-                      {plans.map((p) => {
-                        const v = row.value(p)
-                        return (
-                          <td key={p.id} className={cn("px-5 py-3.5 tabular-nums", p.highlight && "bg-accent-soft/30")}>
-                            {v === true ? (
-                              <Check className="size-4 text-accent-ink" />
-                            ) : v === false ? (
-                              <Minus className="size-4 text-faint" />
-                            ) : (
-                              <span className="font-medium">{v}</span>
-                            )}
-                          </td>
-                        )
-                      })}
                     </tr>
-                  ))}
-                </tbody>
-              ))}
-            </table>
-          </div>
-          <div className="mt-10 flex flex-col items-start justify-between gap-4 rounded-2xl border border-line bg-surface p-6 shadow-card sm:flex-row sm:items-center">
-            <div>
-              <div className="text-[15px] font-semibold">Need more than Scale?</div>
-              <p className="mt-0.5 text-[13.5px] text-muted">Self-host AGMX on your own SES account and every limit becomes configurable in one file.</p>
+                    {group.rows.map((row) => (
+                      <tr key={row.label} className="border-b border-line last:border-0">
+                        <td className="px-5 py-3.5 align-top">
+                          <div className="text-ink-2">{row.label}</div>
+                          {row.hint ? <div className="mt-0.5 text-[12px] text-muted">{row.hint}</div> : null}
+                        </td>
+                        {plans.map((p) => {
+                          const v = row.value(p)
+                          return (
+                            <td key={p.id} className="px-5 py-3.5 align-top tabular-nums">
+                              {v === true ? (
+                                <Check className="size-4 text-ink-2" aria-label="Included" />
+                              ) : v === false ? (
+                                <Minus className="size-4 text-faint" aria-label="Not included" />
+                              ) : (
+                                <span className="font-medium">{v}</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                ))}
+              </table>
             </div>
-            <Link to="/docs" hash="self-hosting">
-              <Button variant="secondary">Self-hosting guide</Button>
-            </Link>
+            <p className="mt-6 text-[13.5px] text-muted">
+              Need more than Scale?{" "}
+              <Link to="/docs" hash="self-hosting" className="text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+                Self-host AGMX
+              </Link>{" "}
+              on your own SES account and set every limit yourself.
+            </p>
           </div>
         </section>
 

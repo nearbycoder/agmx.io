@@ -8,7 +8,6 @@ import { AgentAvatar } from "~/components/brand"
 import { Button } from "~/components/ui/button"
 import { ConfirmDialog } from "~/components/ui/dialog"
 import { Tooltip } from "~/components/ui/menu"
-import { Kbd } from "~/components/ui/misc"
 import { api, ApiFailure } from "~/lib/api"
 import { qk, useAgents } from "~/lib/queries"
 import { cn, formatBytes } from "~/lib/utils"
@@ -210,26 +209,26 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
           void addFiles(e.dataTransfer.files)
         }}
         className={cn(
-          "fixed z-40 flex flex-col overflow-hidden border border-line bg-surface shadow-pop animate-pop",
+          "fixed z-40 flex flex-col overflow-hidden bg-surface shadow-pop animate-pop sm:border sm:border-line",
           minimized
-            ? "right-4 bottom-0 h-11 w-[300px] rounded-t-xl sm:right-6"
+            ? "right-4 bottom-0 h-11 w-[300px] rounded-t-xl border border-line sm:right-6"
             : expanded
-              ? "inset-0 sm:inset-x-[8vw] sm:top-[6vh] sm:bottom-[6vh] sm:rounded-2xl"
-              : "inset-0 sm:inset-auto sm:right-6 sm:bottom-0 sm:h-[min(620px,calc(100dvh-2rem))] sm:w-[560px] sm:rounded-t-2xl"
+              ? "inset-0 sm:inset-x-[8vw] sm:top-[6vh] sm:bottom-[6vh] sm:rounded-xl"
+              : "inset-0 sm:inset-auto sm:right-6 sm:bottom-4 sm:h-[min(600px,calc(100dvh-2rem))] sm:w-[560px] sm:rounded-xl"
         )}
       >
         <div
-          className={cn("flex h-11 shrink-0 cursor-default items-center gap-2 bg-ink px-3 text-bg", !minimized && "sm:rounded-t-2xl")}
+          className={cn("flex h-11 shrink-0 cursor-default items-center gap-2 border-b border-line bg-bg-subtle/60 pr-2 pl-4", minimized && "border-0")}
           onClick={() => minimized && setMinimized(false)}
         >
-          <TitleIcon className="size-3.5 opacity-70" />
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{minimized && subject ? subject : title}</span>
+          <TitleIcon className="size-3.5 text-muted" />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{minimized && subject ? subject : title}</span>
           <button
             onClick={(e) => {
               e.stopPropagation()
               setMinimized((m) => !m)
             }}
-            className="hidden rounded-md p-1 opacity-70 transition hover:bg-white/10 hover:opacity-100 sm:block"
+            className="hidden rounded-md p-1.5 text-muted transition-colors hover:bg-bg-subtle hover:text-ink sm:block"
             aria-label={minimized ? "Restore" : "Minimize"}
           >
             {minimized ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
@@ -237,7 +236,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
           {!minimized ? (
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="hidden rounded-md p-1 opacity-70 transition hover:bg-white/10 hover:opacity-100 sm:block"
+              className="hidden rounded-md p-1.5 text-muted transition-colors hover:bg-bg-subtle hover:text-ink sm:block"
               aria-label={expanded ? "Exit full screen" : "Full screen"}
             >
               {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
@@ -248,7 +247,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
               e.stopPropagation()
               requestClose()
             }}
-            className="rounded-md p-1 opacity-70 transition hover:bg-white/10 hover:opacity-100"
+            className="rounded-md p-1.5 text-muted transition-colors hover:bg-bg-subtle hover:text-ink"
             aria-label="Close"
           >
             <X className="size-4" />
@@ -265,7 +264,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                     <select
                       value={from}
                       onChange={(e) => setFrom(e.target.value)}
-                      className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent py-2 pr-6 font-mono text-[13px] outline-none"
+                      className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent py-2 pr-6 text-[13.5px] outline-none"
                     >
                       {inboxes.length === 0 ? <option value="">No inboxes — create an agent first</option> : null}
                       {inboxes.map((i) => (
@@ -277,12 +276,12 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                     <ChevronDown className="pointer-events-none absolute right-0 size-3.5 text-faint" />
                   </div>
                 ) : (
-                  <span className="truncate py-2 font-mono text-[13px] text-ink-2">{from || "original inbox"}</span>
+                  <span className="truncate py-2 text-[13.5px] text-ink-2">{from || "original inbox"}</span>
                 )}
               </Row>
               {isReply ? (
                 <Row label="To">
-                  <span className="truncate py-2 text-[13px] text-ink-2">
+                  <span className="truncate py-2 text-[13.5px] text-ink-2">
                     {draft.to || "original sender"}
                     {mode === "replyAll" ? <span className="text-muted"> + everyone on the thread</span> : null}
                   </span>
@@ -293,7 +292,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                     label="To"
                     trailing={
                       mode === "new" ? (
-                        <div className="flex gap-1 text-[12px] text-muted">
+                        <div className="flex gap-0.5 text-[13px] text-muted">
                           {!showCc ? (
                             <button className="rounded px-1.5 py-0.5 hover:bg-bg-subtle hover:text-ink" onClick={() => setShowCc(true)}>
                               Cc
@@ -328,12 +327,12 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="What's this about?"
-                    className="min-w-0 flex-1 bg-transparent py-2 text-[13px] font-medium outline-none placeholder:font-normal placeholder:text-faint"
+                    className="min-w-0 flex-1 bg-transparent py-2 text-[13.5px] font-medium outline-none placeholder:font-normal placeholder:text-faint"
                   />
                 </Row>
               ) : (
                 <Row label="Subject">
-                  <span className="truncate py-2 text-[13px] font-medium">{subject}</span>
+                  <span className="truncate py-2 text-[13.5px] font-medium">{subject}</span>
                 </Row>
               )}
             </div>
@@ -350,10 +349,10 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                 <div className="px-4 pb-3">
                   <button
                     onClick={() => setShowQuoted((v) => !v)}
-                    className="inline-flex h-6 items-center rounded-md border border-line bg-surface-2 px-2 font-mono text-[11px] text-muted transition hover:text-ink"
+                    className="inline-flex h-5 items-center rounded-md px-1.5 text-[12px] text-muted ring-1 ring-line transition-colors hover:text-ink hover:ring-line-strong"
                     aria-label={showQuoted ? "Hide quoted message" : "Show quoted message"}
                   >
-                    {showQuoted ? "hide original" : "•••"}
+                    {showQuoted ? "Hide original" : "•••"}
                   </button>
                   {showQuoted ? (
                     <div className="mt-2 border-l-2 border-line pl-3 text-[12.5px] leading-relaxed whitespace-pre-wrap text-muted">
@@ -366,7 +365,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
               {files.length ? (
                 <div className="flex flex-wrap gap-1.5 px-4 pb-3">
                   {files.map((f) => (
-                    <span key={f.id} className="inline-flex max-w-[240px] items-center gap-2 rounded-lg border border-line bg-surface-2 py-1 pr-1 pl-2 text-[12px]">
+                    <span key={f.id} className="inline-flex h-7 max-w-[260px] items-center gap-2 rounded-lg border border-line pr-1 pl-2 text-[12.5px]">
                       <Paperclip className="size-3 shrink-0 text-muted" />
                       <span className="truncate font-medium">{f.filename}</span>
                       <span className="shrink-0 text-muted">{formatBytes(f.size)}</span>
@@ -390,9 +389,9 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
             ) : null}
 
             <div className="flex shrink-0 items-center gap-1 border-t border-line px-3 py-2.5">
-              <Button onClick={submit} loading={send.isPending} className="pr-2.5">
-                <Send /> Send
-                <span className="ml-1 hidden items-center gap-0.5 rounded bg-white/10 px-1 font-mono text-[10px] opacity-70 sm:inline-flex dark:bg-black/10">⌘↵</span>
+              <Button onClick={submit} loading={send.isPending}>
+                Send
+                <span className="ml-0.5 hidden font-mono text-[11px] opacity-50 sm:inline">⌘↵</span>
               </Button>
               {mode !== "forward" ? (
                 <Tooltip content="Attach files (or drop them here)">
@@ -402,10 +401,8 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                 </Tooltip>
               ) : null}
               <input ref={fileInput} type="file" multiple className="hidden" onChange={(e) => void addFiles(e.target.files).then(() => (e.target.value = ""))} />
-              {files.length ? <span className="text-[11.5px] text-muted tabular-nums">{formatBytes(totalBytes)} / 10 MB</span> : null}
-              <span className="ml-auto hidden items-center gap-1 text-[11px] text-faint sm:flex">
-                <Kbd>esc</Kbd> close
-              </span>
+              {files.length ? <span className="text-[12px] text-muted tabular-nums">{formatBytes(totalBytes)} of 10 MB</span> : null}
+              <span className="ml-auto" />
               <Tooltip content="Discard">
                 <Button variant="ghost" size="icon-sm" onClick={requestClose} aria-label="Discard draft">
                   <Trash2 />
@@ -432,8 +429,8 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
 
 function Row({ label, children, trailing }: { label: string; children: React.ReactNode; trailing?: React.ReactNode }) {
   return (
-    <div className="flex min-h-10 items-center gap-3 border-b border-line/60 px-4 last:border-0">
-      <span className="w-14 shrink-0 text-[12px] text-muted">{label}</span>
+    <div className="flex min-h-10 items-center gap-3 border-b border-line px-4 last:border-0">
+      <span className="w-14 shrink-0 text-[13px] text-muted">{label}</span>
       <div className="flex min-w-0 flex-1 items-center">{children}</div>
       {trailing}
     </div>
@@ -468,7 +465,7 @@ function RecipientInput({
           <span
             key={v}
             className={cn(
-              "inline-flex max-w-full items-center gap-1 rounded-md py-0.5 pr-0.5 pl-2 text-[12.5px]",
+              "inline-flex h-6 max-w-full items-center gap-1 rounded-md pr-0.5 pl-2 text-[13px]",
               valid ? "bg-bg-subtle text-ink ring-1 ring-line" : "bg-danger-soft text-danger ring-1 ring-danger/30"
             )}
             title={valid ? v : "Invalid address"}
@@ -506,7 +503,7 @@ function RecipientInput({
           }
         }}
         placeholder={values.length ? "" : placeholder}
-        className="min-w-[120px] flex-1 bg-transparent py-0.5 text-[13px] outline-none placeholder:text-faint"
+        className="min-w-[120px] flex-1 bg-transparent py-0.5 text-[13.5px] outline-none placeholder:text-faint"
       />
     </div>
   )

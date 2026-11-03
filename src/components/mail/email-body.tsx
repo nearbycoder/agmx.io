@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import type { MessageT } from "~/shared/api/domain"
+import { useTheme } from "~/lib/theme"
 import { cn } from "~/lib/utils"
 
-const FRAME_STYLE = `
+const frameStyle = (padding: string) => `
   html,body{margin:0;padding:0;background:#ffffff;color:#1a1a1a}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;padding:20px;word-wrap:break-word;overflow-wrap:anywhere}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;padding:${padding};word-wrap:break-word;overflow-wrap:anywhere}
   img{max-width:100%;height:auto}
   table{max-width:100%}
   pre{white-space:pre-wrap}
@@ -20,6 +21,9 @@ const FRAME_STYLE = `
 export function HtmlFrame({ html, attachments }: { html: string; attachments: MessageT["attachments"] }) {
   const ref = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState(160)
+  // Light mode: the email sits flush on the white reading pane. Dark mode: it's an inset white sheet.
+  const { resolved } = useTheme()
+  const dark = resolved === "dark"
 
   const srcDoc = useMemo(() => {
     let body = html
@@ -28,8 +32,8 @@ export function HtmlFrame({ html, attachments }: { html: string; attachments: Me
       if (!a.contentId) continue
       body = body.split(`cid:${a.contentId}`).join(`${a.downloadUrl}?inline=1`)
     }
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><base target="_blank"><style>${FRAME_STYLE}</style></head><body>${body}</body></html>`
-  }, [html, attachments])
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><base target="_blank"><style>${frameStyle(dark ? "20px" : "0")}</style></head><body>${body}</body></html>`
+  }, [html, attachments, dark])
 
   useEffect(() => {
     const frame = ref.current
@@ -63,7 +67,7 @@ export function HtmlFrame({ html, attachments }: { html: string; attachments: Me
       srcDoc={srcDoc}
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       referrerPolicy="no-referrer"
-      className="mail-html block w-full rounded-xl border border-line bg-white"
+      className={cn("mail-html block w-full bg-white", dark && "rounded-lg")}
       style={{ height }}
     />
   )
@@ -101,10 +105,10 @@ export function PlainBody({ text, className }: { text: string; className?: strin
         <button
           type="button"
           onClick={() => setShowQuoted((v) => !v)}
-          className="mt-3 inline-flex h-6 items-center rounded-md border border-line bg-surface-2 px-2 font-mono text-[11px] text-muted transition hover:text-ink"
+          className="mt-3 inline-flex h-5 items-center rounded-md px-1.5 text-[12px] text-muted ring-1 ring-line transition-colors hover:text-ink hover:ring-line-strong"
           aria-label={showQuoted ? "Hide quoted text" : "Show quoted text"}
         >
-          {showQuoted ? "hide quoted" : "•••"}
+          {showQuoted ? "Hide quoted text" : "•••"}
         </button>
       ) : null}
     </div>

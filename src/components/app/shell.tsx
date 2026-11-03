@@ -19,9 +19,9 @@ import {
   Sun
 } from "lucide-react"
 import { useState, type ReactNode } from "react"
-import { AgentAvatar, Logo } from "~/components/brand"
+import { Logo } from "~/components/brand"
 import { Button } from "~/components/ui/button"
-import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger } from "~/components/ui/menu"
+import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { Kbd, Meter } from "~/components/ui/misc"
 import { authClient } from "~/lib/auth-client"
 import { useAgents, useMe, useSignupRequests } from "~/lib/queries"
@@ -48,14 +48,14 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
 
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">
-      <aside className="hidden w-[248px] shrink-0 border-r border-line bg-bg-subtle/60 lg:flex">
+      <aside className="hidden w-[232px] shrink-0 border-r border-line bg-bg-subtle/40 lg:flex">
         <Sidebar user={user} onSearch={() => palette.setOpen(true)} />
       </aside>
 
       <DialogPrimitive.Root open={mobileOpen} onOpenChange={setMobileOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40 data-[state=open]:animate-fade-in lg:hidden" />
-          <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 flex w-[272px] border-r border-line bg-bg shadow-pop data-[state=open]:animate-[rise_.2s_ease-out] lg:hidden">
+          <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 flex w-[264px] border-r border-line bg-bg shadow-pop data-[state=open]:animate-fade-in lg:hidden">
             <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
             <DialogPrimitive.Description className="sr-only">App navigation</DialogPrimitive.Description>
             <Sidebar user={user} onNavigate={() => setMobileOpen(false)} onSearch={() => palette.setOpen(true)} />
@@ -89,123 +89,83 @@ function Sidebar({ user, onNavigate, onSearch }: { user: SessionUser; onNavigate
   const { data: signups } = useSignupRequests()
   const compose = useCompose()
   const unread = agents?.reduce((sum, a) => sum + a.inboxes.reduce((s, i) => s + i.unreadCount, 0), 0) ?? 0
+  const items = [...NAV, ...(user.role === "admin" ? [{ to: "/app/admin", label: "Operator", icon: Shield } as const] : [])]
+  const sendLimit = me?.plan.monthlySends ?? null
 
   return (
     <div className="flex w-full flex-col">
-      <div className="flex h-14 items-center justify-between px-4">
-        <Link to="/app" onClick={onNavigate}>
+      <div className="flex h-14 shrink-0 items-center justify-between pr-2.5 pl-4">
+        <Link to="/app" onClick={onNavigate} className="flex items-center gap-2">
           <Logo />
+          <span className="rounded-md border border-line px-1.5 py-px text-[10.5px] font-medium text-muted">Beta</span>
         </Link>
-        <span className="rounded-md border border-line bg-surface px-1.5 py-0.5 font-mono text-[10px] text-muted">beta</span>
+        <Tooltip content={<span className="flex items-center gap-1.5">Compose <Kbd className="h-4 min-w-4 border-white/20 bg-transparent text-[10px] text-bg/70 shadow-none">C</Kbd></span>}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Compose"
+            onClick={() => {
+              compose.open()
+              onNavigate?.()
+            }}
+          >
+            <PenSquare />
+          </Button>
+        </Tooltip>
       </div>
 
-      <div className="flex flex-col gap-2 px-3">
-        <Button
-          variant="primary"
-          className="h-9 w-full justify-start"
-          onClick={() => {
-            compose.open()
-            onNavigate?.()
-          }}
-        >
-          <PenSquare /> Compose
-          <span className="ml-auto font-mono text-[11px] opacity-50">C</span>
-        </Button>
+      <div className="px-2.5">
         <button
           onClick={onSearch}
-          className="flex h-9 items-center gap-2 rounded-[10px] border border-line bg-surface px-3 text-[13px] text-muted shadow-card transition hover:border-line-strong hover:text-ink"
+          className="flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] text-muted transition-colors hover:bg-ink/[0.04] hover:text-ink dark:hover:bg-white/[0.05]"
         >
           <Search className="size-4" />
-          Search…
-          <span className="ml-auto flex gap-0.5">
-            <Kbd>⌘</Kbd>
-            <Kbd>K</Kbd>
-          </span>
+          Search
+          <span className="ml-auto font-sans text-[11.5px] text-faint">⌘K</span>
         </button>
       </div>
 
-      <nav className="mt-4 flex flex-col gap-0.5 px-3">
-        {NAV.map((item) => {
+      <nav className="mt-2 flex flex-col gap-px px-2.5">
+        {items.map((item) => {
           const active = "exact" in item && item.exact ? pathname === item.to || pathname === `${item.to}/` : pathname.startsWith(item.to)
-          const badge = item.label === "Mail" && unread > 0 ? unread : item.label === "Agents" && (signups?.length ?? 0) > 0 ? signups!.length : null
+          const count = item.label === "Mail" && unread > 0 ? unread : null
+          const pending = item.label === "Agents" && (signups?.length ?? 0) > 0
           return (
             <Link
               key={item.to}
               to={item.to}
               onClick={onNavigate}
               className={cn(
-                "group flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors",
-                active ? "bg-surface text-ink shadow-card ring-1 ring-line" : "text-ink-2/80 hover:bg-surface/70 hover:text-ink"
+                "flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-colors",
+                active
+                  ? "bg-ink/[0.06] font-medium text-ink dark:bg-white/[0.07]"
+                  : "text-ink-2 hover:bg-ink/[0.04] hover:text-ink dark:hover:bg-white/[0.05]"
               )}
             >
-              <item.icon className={cn("size-4", active ? "text-ink" : "text-muted group-hover:text-ink")} />
+              <item.icon className={cn("size-4", active ? "text-ink" : "text-muted")} />
               {item.label}
-              {badge !== null ? (
-                <span
-                  className={cn(
-                    "ml-auto rounded-full px-1.5 py-px text-[11px] font-semibold tabular-nums",
-                    item.label === "Agents" ? "bg-warn-soft text-warn" : "bg-accent text-accent-fg"
-                  )}
-                >
-                  {badge}
-                </span>
+              {count !== null ? <span className="ml-auto text-[12px] font-medium text-muted tabular-nums">{count}</span> : null}
+              {pending ? (
+                <Tooltip content={`${signups!.length} sign-up request${signups!.length === 1 ? "" : "s"} waiting`}>
+                  <span className="ml-auto size-1.5 rounded-full bg-warn" />
+                </Tooltip>
               ) : null}
             </Link>
           )
         })}
-        {user.role === "admin" ? (
-          <Link
-            to="/app/admin"
-            onClick={onNavigate}
-            className={cn(
-              "group flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors",
-              pathname.startsWith("/app/admin") ? "bg-surface text-ink shadow-card ring-1 ring-line" : "text-ink-2/80 hover:bg-surface/70 hover:text-ink"
-            )}
-          >
-            <Shield className="size-4 text-muted group-hover:text-ink" /> Operator
-          </Link>
-        ) : null}
       </nav>
 
-      <div className="mt-6 flex min-h-0 flex-1 flex-col px-3">
-        <div className="mb-1.5 flex items-center justify-between px-2.5">
-          <span className="text-[11px] font-medium tracking-wider text-faint uppercase">Inboxes</span>
-        </div>
-        <div className="scrollbar-thin -mx-1 flex min-h-0 flex-col gap-px overflow-y-auto px-1 pb-2">
-          {agents?.flatMap((agent) =>
-            agent.inboxes.map((inbox) => (
-              <Link
-                key={inbox.id}
-                to="/app/mail"
-                search={{ inbox: inbox.id }}
-                onClick={onNavigate}
-                className="group flex h-8 items-center gap-2 rounded-lg px-2.5 text-[13px] text-ink-2/80 transition-colors hover:bg-surface/70 hover:text-ink"
-                title={inbox.address}
-              >
-                <AgentAvatar name={agent.name} color={agent.color} size="xs" />
-                <span className="truncate">{inbox.localPart}</span>
-                {inbox.unreadCount > 0 ? <span className="ml-auto text-[11px] font-semibold text-ink tabular-nums">{inbox.unreadCount}</span> : null}
-              </Link>
-            ))
-          )}
-          {agents && agents.every((a) => a.inboxes.length === 0) ? (
-            <Link to="/app/agents" onClick={onNavigate} className="rounded-lg px-2.5 py-2 text-[12.5px] text-muted hover:text-ink">
-              No inboxes yet — create an agent →
-            </Link>
-          ) : null}
-        </div>
-      </div>
+      <div className="flex-1" />
 
-      {me && me.plan.monthlySends !== null ? (
-        <Link to="/app/settings" onClick={onNavigate} className="mx-3 mb-2 rounded-xl border border-line bg-surface p-3 shadow-card transition hover:border-line-strong">
+      {me && sendLimit !== null ? (
+        <Link to="/app/settings" onClick={onNavigate} className="group mx-2.5 mb-1 flex flex-col gap-1.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-ink/[0.04] dark:hover:bg-white/[0.05]">
           <div className="flex items-center justify-between text-[12px]">
-            <span className="font-medium">{me.plan.name} plan</span>
+            <span className="text-muted">{me.plan.name} · sends</span>
             <span className="text-muted tabular-nums">
-              {me.usage.sentThisMonth.toLocaleString()}/{me.plan.monthlySends.toLocaleString()}
+              {me.usage.sentThisMonth.toLocaleString()} / {sendLimit.toLocaleString()}
             </span>
           </div>
-          <Meter className="mt-2" value={me.usage.sentThisMonth} max={me.plan.monthlySends} />
-          <div className="mt-1.5 text-[11px] text-muted">sends this month</div>
+          <Meter value={me.usage.sentThisMonth} max={sendLimit} />
         </Link>
       ) : null}
 
@@ -222,8 +182,8 @@ function UserMenu({ user }: { user: SessionUser }) {
   return (
     <DropdownMenu>
       <DropdownTrigger asChild>
-        <button className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition hover:bg-surface">
-          <span className="flex size-8 items-center justify-center rounded-full bg-ink text-[12px] font-semibold text-bg">{initials(user.name || user.email)}</span>
+        <button className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-ink/[0.04] dark:hover:bg-white/[0.05]">
+          <span className="flex size-7 items-center justify-center rounded-full bg-ink text-[11px] font-semibold text-bg">{initials(user.name || user.email)}</span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium">{user.name || "You"}</span>
             <span className="block truncate text-[11.5px] text-muted">{user.email}</span>

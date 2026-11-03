@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { ArrowRight, Bot } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { AgentAvatar } from "~/components/brand"
@@ -120,7 +120,7 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
                 Cancel
               </Button>
               <Button type="submit" form="create-agent" loading={mutation.isPending} disabled={!name.trim() || Boolean(problem)}>
-                <Bot /> Create agent
+                Create agent
               </Button>
             </>
           }
@@ -134,7 +134,7 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
             }}
           >
             <div className="flex items-start gap-4">
-              <AgentAvatar name={name || "Agent"} color={color} size="lg" className="mt-6" />
+              <AgentAvatar name={name || "Agent"} color={color} size="lg" className="mt-[26px]" />
               <div className="flex flex-1 flex-col gap-4">
                 <Field label="Name" htmlFor="agent-name">
                   <Input id="agent-name" autoFocus required maxLength={80} placeholder="Research assistant" value={name} onChange={(e) => setName(e.target.value)} />
@@ -151,7 +151,7 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
               label="Inbox address"
               htmlFor="agent-username"
               error={problem}
-              hint={username.trim() ? undefined : suggested ? `Leave blank to use ${suggested}@${selectedDomain}` : "Leave blank for a random friendly address."}
+              hint={username.trim() ? undefined : suggested ? `Leave blank to use ${suggested}@${selectedDomain}` : "Leave blank for a random address."}
             >
               <div className="flex gap-2">
                 <AddonInput
@@ -179,7 +179,7 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
             <Field label="Webhook URL" htmlFor="agent-webhook" hint="Optional. We'll POST signed events here when mail arrives.">
               <Input id="agent-webhook" type="url" placeholder="https://example.com/hooks/agmx" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} />
             </Field>
-            <label htmlFor="agent-key" className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-line bg-surface-2 px-4 py-3">
+            <label htmlFor="agent-key" className="flex cursor-pointer items-center justify-between gap-4 border-t border-line pt-4">
               <span>
                 <span className="block text-[13.5px] font-medium">Create an agent API key</span>
                 <span className="block text-[12.5px] text-muted">Scoped to this agent only. Shown once after creation.</span>

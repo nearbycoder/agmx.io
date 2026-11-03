@@ -11,7 +11,7 @@ const METHOD_STYLES: Record<string, string> = {
 }
 
 export const Endpoint = ({ method, path, auth = true }: { method: "GET" | "POST" | "PATCH" | "DELETE"; path: string; auth?: boolean }) => (
-  <div className="not-prose my-4 flex items-center gap-2.5 overflow-hidden rounded-xl border border-line bg-surface px-3 py-2 shadow-card">
+  <div className="not-prose my-4 flex items-center gap-2.5 overflow-hidden rounded-lg border border-line bg-surface px-3 py-2">
     <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-semibold", METHOD_STYLES[method])}>{method}</span>
     <code className="min-w-0 flex-1 truncate !border-0 !bg-transparent !p-0 font-mono text-[13px] text-ink">{path}</code>
     {!auth ? <span className="shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[10.5px] text-muted">no auth</span> : null}
@@ -27,8 +27,8 @@ export interface Param {
 }
 
 export const Params = ({ title = "Parameters", params }: { title?: string; params: Array<Param> }) => (
-  <div className="not-prose my-5 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-    <div className="border-b border-line bg-surface-2 px-4 py-2 text-[11.5px] font-medium tracking-wider text-faint uppercase">{title}</div>
+  <div className="not-prose my-5 overflow-hidden rounded-xl border border-line bg-surface">
+    <div className="border-b border-line bg-bg-subtle/60 px-4 py-2 text-[12px] font-medium text-muted">{title}</div>
     <div className="divide-y divide-line">
       {params.map((p) => (
         <div key={p.name} className="grid gap-1 px-4 py-3 sm:grid-cols-[200px_1fr] sm:gap-4">
@@ -51,11 +51,11 @@ export const Callout = ({ tone = "info", title, children }: { tone?: "info" | "t
       className={cn(
         "not-prose my-5 flex gap-3 rounded-xl border px-4 py-3.5 text-[13.5px] leading-relaxed",
         tone === "warn" && "border-warn/25 bg-warn-soft text-ink-2",
-        tone === "tip" && "border-accent/40 bg-accent-soft text-ink-2",
+        tone === "tip" && "border-line bg-surface text-ink-2",
         tone === "info" && "border-line bg-surface-2 text-ink-2"
       )}
     >
-      <Icon className={cn("mt-0.5 size-4 shrink-0", tone === "warn" ? "text-warn" : tone === "tip" ? "text-accent-ink" : "text-muted")} />
+      <Icon className={cn("mt-0.5 size-4 shrink-0", tone === "warn" ? "text-warn" : "text-muted")} />
       <div className="min-w-0 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[12.5px] dark:[&_code]:bg-white/10">
         {title ? <div className="mb-0.5 font-semibold text-ink">{title}</div> : null}
         {children}
@@ -65,12 +65,12 @@ export const Callout = ({ tone = "info", title, children }: { tone?: "info" | "t
 }
 
 export const DocTable = ({ head, rows }: { head: Array<ReactNode>; rows: Array<Array<ReactNode>> }) => (
-  <div className="not-prose my-5 overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
+  <div className="not-prose my-5 overflow-x-auto rounded-xl border border-line bg-surface">
     <table className="w-full border-collapse text-left text-[13px]">
       <thead>
-        <tr className="border-b border-line bg-surface-2">
+        <tr className="border-b border-line bg-bg-subtle/60">
           {head.map((h, i) => (
-            <th key={i} className="px-4 py-2.5 text-[11.5px] font-medium tracking-wider whitespace-nowrap text-faint uppercase">
+            <th key={i} className="px-4 py-2.5 text-[12px] font-medium whitespace-nowrap text-muted">
               {h}
             </th>
           ))}

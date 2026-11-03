@@ -1,6 +1,6 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Link } from "@tanstack/react-router"
-import { ArrowRight, Menu, Moon, Sun, X } from "lucide-react"
+import { Menu, Moon, Sun, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Logo } from "~/components/brand"
 import { Button } from "~/components/ui/button"
@@ -12,7 +12,7 @@ export const GITHUB_URL = "https://github.com/nearbycoder/agmx.io"
 const LINKS = [
   { to: "/docs", label: "Docs" },
   { to: "/pricing", label: "Pricing" },
-  { href: "/skill.md", label: "skill.md" }
+  { href: "/skill.md", label: "For agents" }
 ] as const
 
 export const GithubIcon = ({ className }: { className?: string }) => (
@@ -27,7 +27,7 @@ export const ThemeToggle = ({ className }: { className?: string }) => {
     <button
       type="button"
       onClick={() => setTheme(resolved === "dark" ? "light" : "dark")}
-      className={cn("inline-flex size-8 items-center justify-center rounded-lg text-muted transition hover:bg-bg-subtle hover:text-ink", className)}
+      className={cn("inline-flex size-[30px] items-center justify-center rounded-lg text-muted transition-colors hover:text-ink", className)}
       aria-label="Toggle theme"
     >
       <Sun className="hidden size-4 dark:block" />
@@ -50,12 +50,12 @@ export function MarketingHeader() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 w-full border-b transition-colors duration-300",
-        scrolled ? "border-line bg-bg/80 backdrop-blur-xl" : "border-transparent bg-transparent"
+        "sticky top-0 z-40 w-full border-b transition-colors duration-200",
+        scrolled ? "border-line bg-bg/85 backdrop-blur-xl" : "border-transparent bg-bg"
       )}
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
-        <div className="flex items-center gap-8">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-5 sm:px-8">
+        <div className="flex items-center gap-7">
           <Link to="/" aria-label="AGMX home">
             <Logo />
           </Link>
@@ -65,25 +65,25 @@ export function MarketingHeader() {
                 <Link
                   key={link.label}
                   to={link.to}
-                  className="rounded-lg px-3 py-1.5 text-[13.5px] font-medium text-ink-2/80 transition hover:bg-bg-subtle hover:text-ink"
-                  activeProps={{ className: "text-ink" }}
+                  className="rounded-lg px-2.5 py-1.5 text-[13.5px] text-muted transition-colors hover:text-ink"
+                  activeProps={{ className: "!text-ink" }}
                 >
                   {link.label}
                 </Link>
               ) : (
-                <a key={link.label} href={link.href} className="rounded-lg px-3 py-1.5 font-mono text-[12.5px] text-ink-2/80 transition hover:bg-bg-subtle hover:text-ink">
+                <a key={link.label} href={link.href} className="rounded-lg px-2.5 py-1.5 text-[13.5px] text-muted transition-colors hover:text-ink">
                   {link.label}
                 </a>
               )
             )}
           </nav>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noreferrer"
-            className="hidden size-8 items-center justify-center rounded-lg text-muted transition hover:bg-bg-subtle hover:text-ink sm:inline-flex"
+            className="hidden size-[30px] items-center justify-center rounded-lg text-muted transition-colors hover:text-ink sm:inline-flex"
             aria-label="GitHub"
           >
             <GithubIcon />
@@ -94,10 +94,8 @@ export function MarketingHeader() {
               Sign in
             </Button>
           </Link>
-          <Link to="/login">
-            <Button size="sm" className="group">
-              Get started <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
-            </Button>
+          <Link to="/login" className="ml-1">
+            <Button size="sm">Get started</Button>
           </Link>
           <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
             <DialogPrimitive.Trigger asChild>
@@ -107,7 +105,7 @@ export function MarketingHeader() {
             </DialogPrimitive.Trigger>
             <DialogPrimitive.Portal>
               <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm data-[state=open]:animate-fade-in md:hidden" />
-              <DialogPrimitive.Content className="fixed inset-x-3 top-3 z-50 rounded-2xl border border-line bg-surface p-4 shadow-pop data-[state=open]:animate-pop md:hidden">
+              <DialogPrimitive.Content className="fixed inset-x-3 top-3 z-50 rounded-xl border border-line bg-surface p-4 shadow-pop data-[state=open]:animate-pop md:hidden">
                 <DialogPrimitive.Title className="sr-only">Menu</DialogPrimitive.Title>
                 <DialogPrimitive.Description className="sr-only">Site navigation</DialogPrimitive.Description>
                 <div className="flex items-center justify-between">
@@ -123,7 +121,7 @@ export function MarketingHeader() {
                         {link.label}
                       </Link>
                     ) : (
-                      <a key={link.label} href={link.href} className="rounded-lg px-3 py-2.5 font-mono text-[14px] hover:bg-bg-subtle">
+                      <a key={link.label} href={link.href} className="rounded-lg px-3 py-2.5 text-[15px] font-medium hover:bg-bg-subtle">
                         {link.label}
                       </a>
                     )

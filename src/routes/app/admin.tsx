@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { AlertTriangle, CheckCircle2, Circle, Server, ShieldAlert, Users } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Circle, ShieldAlert } from "lucide-react"
 import type { ReactNode } from "react"
 import { toast } from "sonner"
 import { Page, PageHeader } from "~/components/app/page"
-import { KV, NativeSelect, toastFailure } from "~/components/dashboard/common"
-import { Badge, StatusDot } from "~/components/ui/badge"
-import { Card, CardBody, CardHeader } from "~/components/ui/card"
-import { CopyButton, EmptyState, Meter, Skeleton } from "~/components/ui/misc"
+import { CopyField, KV, NativeSelect, Notice, toastFailure } from "~/components/dashboard/common"
+import { Panel, Section } from "~/components/dashboard/section"
+import { EmptyState, Meter, Skeleton } from "~/components/ui/misc"
+import { Table, TBody, Td, Th, THead, Tr } from "~/components/ui/table"
 import { api } from "~/lib/api"
 import { qk, useMe } from "~/lib/queries"
 import { cn, relativeTime } from "~/lib/utils"
@@ -19,28 +19,35 @@ export const Route = createFileRoute("/app/admin")({
 
 function AdminPage() {
   const { data: me, isLoading } = useMe()
-  if (isLoading) return <Page><Skeleton className="h-64 rounded-2xl" /></Page>
+  if (isLoading)
+    return (
+      <Page>
+        <Skeleton className="h-64 rounded-xl" />
+      </Page>
+    )
   if (me?.user.role !== "admin") {
     return (
       <Page>
-        <EmptyState icon={<ShieldAlert />} title="Operators only" description="This area is for the people who run this AGMX server. Ask them if you need something changed." />
+        <Panel>
+          <EmptyState icon={<ShieldAlert />} title="Operators only" description="This area is for the people who run this AGMX server." />
+        </Panel>
       </Page>
     )
   }
   return (
     <Page>
       <PageHeader title="Operator" description="Server health, Amazon SES setup and account management." />
-      <div className="flex flex-col gap-6">
-        <SystemCard />
-        <UsersCard />
+      <div className="flex flex-col gap-10">
+        <SystemSection />
+        <UsersSection />
       </div>
     </Page>
   )
 }
 
-function SystemCard() {
+function SystemSection() {
   const { data: sys, isLoading } = useQuery({ queryKey: qk.system, queryFn: () => api((c) => c.admin.system()) })
-  if (isLoading || !sys) return <Skeleton className="h-80 rounded-2xl" />
+  if (isLoading || !sys) return <Skeleton className="h-80 rounded-xl" />
   const ses = sys.sesAccount
   const region = sys.awsRegion
   const steps: Array<{ done: boolean | null; title: string; body: ReactNode; copy?: string }> = [
@@ -56,7 +63,7 @@ function SystemCard() {
     {
       done: ses ? ses.sendingEnabled : null,
       title: `Verify ${sys.mailDomain} in SES`,
-      body: <>In the SES console → Identities, add the domain and publish its DKIM CNAMEs. Sending is {ses?.sendingEnabled ? "enabled" : "not confirmed"}.</>
+      body: <>In SES, add the domain under Identities and publish its DKIM records. Sending is {ses?.sendingEnabled ? "enabled" : "not confirmed yet"}.</>
     },
     {
       done: null,
@@ -71,7 +78,7 @@ function SystemCard() {
     {
       done: null,
       title: "Receipt rule → SNS → AGMX",
-      body: <>Create an active receipt rule for the domain with an SNS action (Base64 encoding) or S3 + SNS action, and subscribe this HTTPS endpoint to the topic. Subscriptions are confirmed automatically.</>,
+      body: <>Create an active receipt rule for the domain with an S3 + SNS action (or an SNS action with Base64 encoding), then subscribe this endpoint to the topic. Subscriptions confirm automatically.</>,
       copy: sys.inboundWebhookUrl
     },
     {
@@ -86,110 +93,100 @@ function SystemCard() {
     {
       done: ses ? ses.productionAccess : null,
       title: "Request production access",
-      body: <>New SES accounts are sandboxed and can only send to verified addresses. {ses ? (ses.productionAccess ? "Production access is enabled." : "This account is still in the sandbox.") : ""}</>
+      body: <>New SES accounts can only send to verified addresses. {ses ? (ses.productionAccess ? "Production access is enabled." : "This account is still in the sandbox.") : ""}</>
     }
   ]
 
+  const dot = (ok: boolean | null) => <span className={cn("size-1.5 rounded-full", ok === null ? "bg-faint" : ok ? "bg-ok" : "bg-warn")} />
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      <Card>
-        <CardHeader
-          title={
-            <span className="flex items-center gap-2">
-              <Server className="size-4 text-muted" /> System
-            </span>
-          }
-        />
-        <CardBody className="divide-y divide-line py-1">
+    <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <Section title="System" description="How this server is configured.">
+        <Panel divided>
           <KV label="Mail transport">
-            {sys.mailTransport === "ses" ? (
-              <Badge tone="ok">
-                <StatusDot tone="ok" /> Amazon SES
-              </Badge>
-            ) : (
-              <Badge tone="warn">
-                <StatusDot tone="warn" /> Console log (dev)
-              </Badge>
-            )}
+            <span className="inline-flex items-center gap-1.5">
+              {dot(sys.mailTransport === "ses")}
+              {sys.mailTransport === "ses" ? "Amazon SES" : "Console log (development)"}
+            </span>
           </KV>
           <KV label="Shared domain">
-            <span className="font-mono">{sys.mailDomain}</span>
+            <code className="font-mono text-[12.5px]">{sys.mailDomain}</code>
           </KV>
           <KV label="AWS region">
-            <span className="font-mono">{sys.awsRegion}</span>
+            <code className="font-mono text-[12.5px]">{sys.awsRegion}</code>
           </KV>
-          <KV label="Production access">{ses ? ses.productionAccess ? <Badge tone="ok">Yes</Badge> : <Badge tone="warn">Sandbox</Badge> : <span className="text-faint">—</span>}</KV>
+          <KV label="Production access">
+            {ses ? (
+              <span className="inline-flex items-center gap-1.5">
+                {dot(ses.productionAccess)}
+                {ses.productionAccess ? "Enabled" : "Sandbox"}
+              </span>
+            ) : (
+              <span className="text-faint">—</span>
+            )}
+          </KV>
           {ses ? (
-            <div className="py-3">
-              <div className="mb-2 flex items-center justify-between text-[13px]">
-                <span className="text-muted">SES 24h quota</span>
-                <span className="font-medium tabular-nums">
-                  {ses.sentLast24Hours.toLocaleString()} / {ses.max24HourSend.toLocaleString()} · {ses.maxSendRate}/s
+            <div className="flex flex-col gap-2 px-5 py-3">
+              <div className="flex items-center justify-between text-[13.5px]">
+                <span className="text-muted">SES sending, last 24 h</span>
+                <span className="tabular-nums">
+                  {ses.sentLast24Hours.toLocaleString()} <span className="text-muted">of {ses.max24HourSend.toLocaleString()} · {ses.maxSendRate}/s</span>
                 </span>
               </div>
               <Meter value={ses.sentLast24Hours} max={ses.max24HourSend} />
             </div>
           ) : null}
-          <KV label="Inbound webhook">
-            <span className="flex items-center justify-end gap-1">
-              <code className="truncate font-mono text-[12px] font-normal">{sys.inboundWebhookUrl}</code>
-              <CopyButton value={sys.inboundWebhookUrl} size="xs" label="Webhook URL copied" />
-            </span>
-          </KV>
-          <div className="py-3">
-            <div className="mb-2 text-[13px] text-muted">Allowed sign-in emails</div>
+          <div className="flex flex-col gap-2 px-5 py-3">
+            <span className="text-[13.5px] text-muted">Inbound webhook</span>
+            <CopyField value={sys.inboundWebhookUrl} label="Webhook URL" />
+          </div>
+          <div className="flex flex-col gap-2 px-5 py-3">
+            <span className="text-[13.5px] text-muted">Allowed sign-in emails</span>
             <div className="flex flex-wrap gap-1.5">
               {sys.allowedEmails.map((e) => (
-                <span key={e} className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-[12px]">
+                <code key={e} className="rounded-md border border-line bg-bg-subtle/50 px-2 py-0.5 font-mono text-[12px]">
                   {e}
-                </span>
+                </code>
               ))}
             </div>
-            <p className="mt-2 text-[12px] text-faint">
-              Change with the <Code>ALLOWED_EMAILS</Code> environment variable.
+            <p className="text-[12px] text-muted">
+              Set with the <Code>ALLOWED_EMAILS</Code> environment variable.
             </p>
           </div>
-          {sys.sesError ? (
-            <div className="my-3 flex gap-2 rounded-xl border border-danger/20 bg-danger-soft px-3 py-2.5 text-[12.5px] text-danger">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {sys.sesError}
-            </div>
-          ) : null}
-        </CardBody>
-      </Card>
+        </Panel>
+        {sys.sesError ? (
+          <Notice tone="danger">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {sys.sesError}
+          </Notice>
+        ) : null}
+      </Section>
 
-      <Card>
-        <CardHeader title="Amazon SES setup" description="Everything needed for real sending and receiving." />
-        <ol className="divide-y divide-line">
+      <Section title="Amazon SES setup" description="What real sending and receiving needs.">
+        <Panel divided>
           {steps.map((s, i) => (
-            <li key={s.title} className="flex gap-3.5 px-5 py-3.5">
-              <span className="mt-0.5">
+            <div key={s.title} className="flex gap-3 px-5 py-3.5">
+              <span className="mt-0.5 shrink-0">
                 {s.done === true ? (
-                  <CheckCircle2 className="size-5 text-ok" />
+                  <CheckCircle2 className="size-4 text-ok" />
                 ) : s.done === false ? (
-                  <Circle className="size-5 text-warn" />
+                  <Circle className="size-4 text-warn" />
                 ) : (
-                  <span className="flex size-5 items-center justify-center rounded-full border border-line-strong text-[11px] font-semibold text-muted">{i + 1}</span>
+                  <span className="flex size-4 items-center justify-center rounded-full border border-line-strong text-[10px] font-medium text-muted tabular-nums">{i + 1}</span>
                 )}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="text-[13.5px] font-medium">{s.title}</div>
-                <div className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{s.body}</div>
-                {s.copy ? (
-                  <div className="mt-2 flex items-center gap-1 rounded-lg border border-line bg-surface-2 py-0.5 pr-0.5 pl-2.5">
-                    <code className="min-w-0 flex-1 truncate font-mono text-[12px]">{s.copy}</code>
-                    <CopyButton value={s.copy} size="xs" />
-                  </div>
-                ) : null}
+                <div className="mt-0.5 text-[13px] leading-relaxed text-muted">{s.body}</div>
+                {s.copy ? <CopyField value={s.copy} className="mt-2" /> : null}
               </div>
-            </li>
+            </div>
           ))}
-        </ol>
-      </Card>
+        </Panel>
+      </Section>
     </div>
   )
 }
 
-function UsersCard() {
+function UsersSection() {
   const queryClient = useQueryClient()
   const { data: users, isLoading } = useQuery({ queryKey: qk.adminUsers, queryFn: () => api((c) => c.admin.users()) })
   const update = useMutation({
@@ -203,76 +200,62 @@ function UsersCard() {
     onError: (e) => toastFailure(e)
   })
   return (
-    <Card className="overflow-hidden">
-      <CardHeader
-        title={
-          <span className="flex items-center gap-2">
-            <Users className="size-4 text-muted" /> Accounts
-          </span>
-        }
-        description={users ? `${users.length} account${users.length === 1 ? "" : "s"}` : undefined}
-      />
+    <Section title="Accounts" description={users ? `${users.length} ${users.length === 1 ? "account" : "accounts"}` : undefined}>
       {isLoading ? (
-        <div className="p-5">
-          <Skeleton className="h-24 w-full" />
-        </div>
+        <Skeleton className="h-32 w-full rounded-xl" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-line bg-surface-2 text-[11px] tracking-wider text-faint uppercase">
-                <th className="px-5 py-2.5 font-medium">Account</th>
-                <th className="px-3 py-2.5 font-medium">Agents</th>
-                <th className="px-3 py-2.5 font-medium">Inboxes</th>
-                <th className="px-3 py-2.5 font-medium">Sent (month)</th>
-                <th className="px-3 py-2.5 font-medium">Plan</th>
-                <th className="px-3 py-2.5 font-medium">Role</th>
-                <th className="px-5 py-2.5 font-medium">Joined</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {users?.map((u) => (
-                <tr key={u.id} className={cn("transition hover:bg-surface-2", update.isPending && update.variables?.userId === u.id && "opacity-60")}>
-                  <td className="px-5 py-3">
-                    <div className="font-medium">{u.name || "—"}</div>
-                    <div className="text-[12px] text-muted">{u.email}</div>
-                  </td>
-                  <td className="px-3 py-3 tabular-nums">{u.agents}</td>
-                  <td className="px-3 py-3 tabular-nums">{u.inboxes}</td>
-                  <td className="px-3 py-3 tabular-nums">{u.sentThisMonth.toLocaleString()}</td>
-                  <td className="px-3 py-3">
-                    <NativeSelect
-                      aria-label={`Plan for ${u.email}`}
-                      className="h-8 w-32 text-[13px]"
-                      value={u.plan}
-                      onChange={(plan) => update.mutate({ userId: u.id, plan: plan as "free" | "pro" | "scale" | "unlimited" })}
-                    >
-                      <option value="free">Starter</option>
-                      <option value="pro">Pro</option>
-                      <option value="scale">Scale</option>
-                      <option value="unlimited">Unlimited</option>
-                    </NativeSelect>
-                  </td>
-                  <td className="px-3 py-3">
-                    <NativeSelect
-                      aria-label={`Role for ${u.email}`}
-                      className="h-8 w-28 text-[13px]"
-                      value={u.role}
-                      onChange={(role) => update.mutate({ userId: u.id, role: role as "user" | "admin" })}
-                    >
-                      <option value="user">User</option>
-                      <option value="admin">Operator</option>
-                    </NativeSelect>
-                  </td>
-                  <td className="px-5 py-3 text-muted">{relativeTime(u.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <THead>
+            <Th>Account</Th>
+            <Th className="text-right">Agents</Th>
+            <Th className="text-right">Inboxes</Th>
+            <Th className="text-right">Sent this month</Th>
+            <Th>Plan</Th>
+            <Th>Role</Th>
+            <Th>Joined</Th>
+          </THead>
+          <TBody>
+            {users?.map((u) => (
+              <Tr key={u.id} className={cn(update.isPending && update.variables?.userId === u.id && "opacity-60")}>
+                <Td>
+                  <div className="font-medium">{u.name || "—"}</div>
+                  <div className="text-[12.5px] text-muted">{u.email}</div>
+                </Td>
+                <Td className="text-right tabular-nums">{u.agents}</Td>
+                <Td className="text-right tabular-nums">{u.inboxes}</Td>
+                <Td className="text-right tabular-nums">{u.sentThisMonth.toLocaleString()}</Td>
+                <Td>
+                  <NativeSelect
+                    aria-label={`Plan for ${u.email}`}
+                    className="h-[30px] w-32 text-[13px]"
+                    value={u.plan}
+                    onChange={(plan) => update.mutate({ userId: u.id, plan: plan as "free" | "pro" | "scale" | "unlimited" })}
+                  >
+                    <option value="free">Starter</option>
+                    <option value="pro">Pro</option>
+                    <option value="scale">Scale</option>
+                    <option value="unlimited">Unlimited</option>
+                  </NativeSelect>
+                </Td>
+                <Td>
+                  <NativeSelect
+                    aria-label={`Role for ${u.email}`}
+                    className="h-[30px] w-28 text-[13px]"
+                    value={u.role}
+                    onChange={(role) => update.mutate({ userId: u.id, role: role as "user" | "admin" })}
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Operator</option>
+                  </NativeSelect>
+                </Td>
+                <Td className="whitespace-nowrap text-muted">{relativeTime(u.createdAt)}</Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
       )}
-    </Card>
+    </Section>
   )
 }
 
-const Code = ({ children }: { children: ReactNode }) => <code className="rounded bg-bg-subtle px-1 py-px font-mono text-[11.5px] text-ink-2">{children}</code>
+const Code = ({ children }: { children: ReactNode }) => <code className="font-mono text-[12px] text-ink-2">{children}</code>

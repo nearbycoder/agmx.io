@@ -38,11 +38,11 @@ export const SHORTCUTS: Array<{ group: string; items: Array<[string[], string]> 
 export function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Keyboard shortcuts" description="Fly through your agents' mail without touching the mouse." className="max-w-xl">
+      <DialogContent title="Keyboard shortcuts" description="Work through your agents' mail without the mouse." className="max-w-xl">
         <div className="grid gap-6 sm:grid-cols-2">
           {SHORTCUTS.map((section) => (
             <div key={section.group} className={section.group === "Act" ? "sm:row-span-2" : undefined}>
-              <div className="mb-2 text-[11px] font-medium tracking-wider text-faint uppercase">{section.group}</div>
+              <div className="mb-2 text-[11px] font-medium tracking-[0.08em] text-faint uppercase">{section.group}</div>
               <div className="flex flex-col">
                 {section.items.map(([keys, label]) => (
                   <div key={label} className="flex items-center justify-between border-b border-line/60 py-1.5 text-[13px] last:border-0">

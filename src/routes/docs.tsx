@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { ArrowUpRight, BookOpen, ChevronDown, FileText } from "lucide-react"
+import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { Callout, DocTable, Endpoint, Params } from "~/components/marketing/docs-kit"
 import { MarketingFooter } from "~/components/marketing/footer"
@@ -82,9 +82,8 @@ function useActiveSection() {
   return active
 }
 
-const H2 = ({ id, children, kicker }: { id: string; children: ReactNode; kicker?: string }) => (
-  <h2 id={id} className="group flex items-baseline gap-3 border-t border-line pt-12 first:border-0 first:pt-0">
-    {kicker ? <span className="font-mono text-[11px] font-medium tracking-widest text-accent-ink uppercase">{kicker}</span> : null}
+const H2 = ({ id, children }: { id: string; children: ReactNode }) => (
+  <h2 id={id} className="border-t border-line pt-12">
     <a href={`#${id}`} className="!no-underline">
       {children}
     </a>
@@ -103,7 +102,7 @@ function DocsPage() {
       <MarketingHeader />
 
       {/* Mobile section picker */}
-      <div className="sticky top-16 z-30 border-b border-line bg-bg/90 backdrop-blur lg:hidden">
+      <div className="sticky top-14 z-30 border-b border-line bg-bg/90 backdrop-blur lg:hidden">
         <button onClick={() => setMobileOpen((o) => !o)} className="flex w-full items-center justify-between px-5 py-3 text-[13.5px] font-medium" aria-expanded={mobileOpen}>
           <span className="flex items-center gap-2">
             <BookOpen className="size-4 text-muted" /> {activeLabel}
@@ -118,15 +117,13 @@ function DocsPage() {
       </div>
 
       <div className="mx-auto flex max-w-6xl gap-12 px-5 sm:px-8">
-        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-56 shrink-0 overflow-y-auto py-10 lg:block scrollbar-thin">
+        <aside className="scrollbar-thin sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 overflow-y-auto py-10 lg:block">
           <SidebarNav active={active} />
-          <div className="mt-8 rounded-xl border border-line bg-surface p-3.5 shadow-card">
-            <div className="flex items-center gap-2 text-[12.5px] font-semibold">
-              <FileText className="size-4 text-accent-ink" /> For agents
-            </div>
-            <p className="mt-1 text-[12px] leading-relaxed text-muted">A condensed, agent-readable version of these docs.</p>
-            <a href="/skill.md" className="mt-2.5 inline-flex items-center gap-1 font-mono text-[12px] text-ink hover:underline">
-              /skill.md <ArrowUpRight className="size-3" />
+          <div className="mt-8 border-t border-line pt-5 pl-2.5">
+            <div className="text-[12px] font-medium text-ink">For agents</div>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted">A condensed version of these docs, written for agents to read.</p>
+            <a href="/skill.md" className="mt-2 inline-flex items-center gap-1 text-[12.5px] text-ink hover:underline">
+              Open skill.md <ArrowUpRight className="size-3" />
             </a>
           </div>
         </aside>
@@ -134,8 +131,7 @@ function DocsPage() {
         <article className="prose-docs min-w-0 flex-1 py-10 pb-24 lg:py-14">
           {/* ------------------------------------------------------------- */}
           <section>
-            <div className="font-mono text-[11.5px] font-medium tracking-[0.14em] text-accent-ink uppercase">Documentation</div>
-            <h1 id="introduction" className="mt-3 scroll-mt-28 text-[38px] leading-[1.05] font-semibold tracking-[-0.04em] sm:text-[46px]">
+            <h1 id="introduction" className="scroll-mt-28 text-4xl leading-[1.08] font-semibold tracking-[-0.035em] sm:text-[44px]">
               Email for AI agents
             </h1>
             <p className="!mt-4 !text-[17px] text-muted">
@@ -148,7 +144,7 @@ function DocsPage() {
                 { href: "#waiting", title: "Verification codes", body: "Wait for an email and read the code." },
                 { href: "#mcp", title: "MCP server", body: "Plug AGMX into Claude or Cursor." }
               ].map((c) => (
-                <a key={c.href} href={c.href} className="group rounded-xl border border-line bg-surface p-4 !no-underline shadow-card transition hover:-translate-y-0.5 hover:border-line-strong">
+                <a key={c.href} href={c.href} className="group rounded-xl border border-line bg-surface p-4 !no-underline transition-colors hover:border-line-strong">
                   <div className="flex items-center justify-between text-[14px] font-semibold">
                     {c.title}
                     <ArrowUpRight className="size-4 text-faint transition group-hover:text-ink" />
@@ -178,7 +174,7 @@ function DocsPage() {
           </section>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="quickstart" kicker="01">
+          <H2 id="quickstart">
             Quickstart
           </H2>
           <p>There are two ways to get credentials: let the agent sign itself up (you approve it), or create an agent and key yourself in the dashboard.</p>
@@ -266,7 +262,7 @@ function DocsPage() {
           </p>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="authentication" kicker="02">
+          <H2 id="authentication">
             Authentication
           </H2>
           <p>
@@ -286,7 +282,7 @@ function DocsPage() {
           <Callout tone="tip">Give each agent its own agent key. If one leaks, revoke it in the dashboard without touching any other agent.</Callout>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="inboxes" kicker="03">
+          <H2 id="inboxes">
             Inboxes
           </H2>
           <p>An inbox is a real address that belongs to one agent. Each plan sets how many inboxes an agent may own.</p>
@@ -314,7 +310,7 @@ function DocsPage() {
           </p>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="sending" kicker="04">
+          <H2 id="sending">
             Sending
           </H2>
           <Endpoint method="POST" path="/api/v1/messages" />
@@ -385,7 +381,7 @@ const message = await res.json() // full Message, status "sent"`
           </ul>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="receiving" kicker="05">
+          <H2 id="receiving">
             Receiving
           </H2>
           <Endpoint method="GET" path="/api/v1/messages" />
@@ -429,7 +425,7 @@ const message = await res.json() // full Message, status "sent"`
           </p>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="waiting" kicker="06">
+          <H2 id="waiting">
             Waiting for email
           </H2>
           <p>
@@ -461,7 +457,7 @@ const code = message.extracted.codes[0]`}
           />
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="threads" kicker="07">
+          <H2 id="threads">
             Replies & threads
           </H2>
           <Endpoint method="POST" path="/api/v1/messages/{messageId}/reply" />
@@ -480,7 +476,7 @@ const code = message.extracted.codes[0]`}
           </p>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="organizing" kicker="08">
+          <H2 id="organizing">
             Flags & labels
           </H2>
           <Endpoint method="PATCH" path="/api/v1/messages/{messageId}" />
@@ -495,7 +491,7 @@ const code = message.extracted.codes[0]`}
           </p>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="webhooks" kicker="09">
+          <H2 id="webhooks">
             Webhooks
           </H2>
           <p>
@@ -552,7 +548,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
           </p>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="mcp" kicker="10">
+          <H2 id="mcp">
             MCP server
           </H2>
           <p>
@@ -613,7 +609,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
           />
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="domains" kicker="11">
+          <H2 id="domains">
             Custom domains
           </H2>
           <p>
@@ -635,7 +631,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
           <Callout>Using a subdomain like <code>mail.example.com</code> keeps your existing root-domain MX records untouched.</Callout>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="errors" kicker="12">
+          <H2 id="errors">
             Errors
           </H2>
           <p>
@@ -665,7 +661,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
           />
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="limits" kicker="13">
+          <H2 id="limits">
             Plans & limits
           </H2>
           <p>
@@ -679,7 +675,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
           </ul>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="self-hosting" kicker="14">
+          <H2 id="self-hosting">
             Self-hosting
           </H2>
           <p>
@@ -739,7 +735,7 @@ bun run start:prod   # runs database migrations, then starts the server`}
           </Callout>
 
           {/* ------------------------------------------------------------- */}
-          <H2 id="api-reference" kicker="15">
+          <H2 id="api-reference">
             API reference
           </H2>
           <p>Every endpoint, schema and error is described in a generated OpenAPI 3.1 document, with an interactive explorer.</p>
@@ -750,7 +746,7 @@ bun run start:prod   # runs database migrations, then starts the server`}
               { href: "/skill.md", title: "skill.md", body: "Agent-oriented guide in Markdown." },
               { href: "/llms.txt", title: "llms.txt", body: "Index for LLM crawlers." }
             ].map((c) => (
-              <a key={c.href} href={c.href} className="group flex items-center justify-between rounded-xl border border-line bg-surface p-4 !no-underline shadow-card transition hover:border-line-strong">
+              <a key={c.href} href={c.href} className="group flex items-center justify-between rounded-xl border border-line bg-surface p-4 !no-underline transition-colors hover:border-line-strong">
                 <div>
                   <div className="text-[14px] font-semibold">{c.title}</div>
                   <div className="mt-0.5 text-[13px] text-muted">{c.body}</div>
@@ -771,8 +767,8 @@ function SidebarNav({ active, onNavigate }: { active: string; onNavigate?: () =>
     <nav className="flex flex-col gap-6">
       {NAV.map((group) => (
         <div key={group.group}>
-          <div className="px-2.5 text-[11px] font-medium tracking-wider text-faint uppercase">{group.group}</div>
-          <ul className="mt-2 flex flex-col gap-px">
+          <div className="px-2.5 text-[12px] font-medium text-ink">{group.group}</div>
+          <ul className="mt-1.5 flex flex-col gap-px">
             {group.items.map((item) => (
               <li key={item.id}>
                 <a
@@ -780,7 +776,7 @@ function SidebarNav({ active, onNavigate }: { active: string; onNavigate?: () =>
                   onClick={onNavigate}
                   className={cn(
                     "relative block rounded-lg px-2.5 py-1.5 text-[13.5px] transition-colors",
-                    active === item.id ? "bg-surface font-medium text-ink shadow-card ring-1 ring-line" : "text-ink-2/75 hover:bg-surface/70 hover:text-ink"
+                    active === item.id ? "bg-bg-subtle font-medium text-ink" : "text-muted hover:text-ink"
                   )}
                 >
                   {item.label}

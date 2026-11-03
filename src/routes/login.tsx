@@ -1,5 +1,5 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router"
-import { ArrowRight, CheckCircle2, KeyRound, Lock, Mail, Sparkles } from "lucide-react"
+import { KeyRound, Mail, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { Logo } from "~/components/brand"
 import { Button } from "~/components/ui/button"
@@ -71,11 +71,9 @@ function LoginPage() {
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
           {sent ? (
             <div className="animate-rise text-center">
-              <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink">
-                <Mail className="size-6" />
-              </div>
-              <h1 className="text-2xl font-semibold tracking-tight">Check your inbox</h1>
-              <p className="mt-2 text-sm leading-relaxed text-muted">
+              <Mail className="mx-auto mb-5 size-6 text-faint" />
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em]">Check your inbox</h1>
+              <p className="mt-2 text-[14px] leading-relaxed text-muted">
                 We sent a sign-in link to <span className="font-medium text-ink">{email}</span>. It expires in 15 minutes.
               </p>
               <Button variant="ghost" className="mt-6" onClick={() => setSent(false)}>
@@ -84,10 +82,10 @@ function LoginPage() {
             </div>
           ) : (
             <div className="animate-rise">
-              <h1 className="text-[28px] font-semibold tracking-[-0.03em]">Welcome back</h1>
-              <p className="mt-1.5 text-sm text-muted">Sign in to manage your agents and their inboxes.</p>
+              <h1 className="text-[26px] font-semibold tracking-[-0.03em]">Sign in to AGMX</h1>
+              <p className="mt-1.5 text-[14px] text-muted">Manage your agents and their inboxes.</p>
 
-              <div className="mt-8 grid grid-cols-2 gap-1 rounded-xl border border-line bg-bg-subtle p-1">
+              <div className="mt-8 grid grid-cols-2 gap-1 rounded-lg border border-line bg-bg-subtle p-0.5">
                 {(
                   [
                     ["magic", "Email link", Sparkles],
@@ -102,7 +100,7 @@ function LoginPage() {
                       setError(null)
                     }}
                     className={cn(
-                      "flex items-center justify-center gap-2 rounded-lg py-1.5 text-[13px] font-medium transition",
+                      "flex h-[30px] items-center justify-center gap-2 rounded-md text-[13px] font-medium transition-colors",
                       mode === value ? "bg-surface text-ink shadow-card" : "text-muted hover:text-ink"
                     )}
                   >
@@ -115,22 +113,22 @@ function LoginPage() {
               {mode === "magic" ? (
                 <form onSubmit={submitMagic} className="mt-6 flex flex-col gap-4">
                   <Field label="Email" htmlFor="email">
-                    <Input id="email" type="email" required autoFocus autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10" />
+                    <Input id="email" type="email" required autoFocus autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
                   </Field>
                   {error ? <ErrorNote message={error} /> : null}
                   <Button type="submit" size="lg" loading={loading} className="w-full">
-                    Email me a sign-in link <ArrowRight />
+                    Email me a sign-in link
                   </Button>
                 </form>
               ) : (
                 <form onSubmit={submitPassword} className="mt-6 flex flex-col gap-4">
                   {passwordMode === "signup" ? (
                     <Field label="Name" htmlFor="name">
-                      <Input id="name" autoComplete="name" placeholder="Ada Lovelace" value={name} onChange={(e) => setName(e.target.value)} className="h-10" />
+                      <Input id="name" autoComplete="name" placeholder="Ada Lovelace" value={name} onChange={(e) => setName(e.target.value)} />
                     </Field>
                   ) : null}
                   <Field label="Email" htmlFor="email2">
-                    <Input id="email2" type="email" required autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10" />
+                    <Input id="email2" type="email" required autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} />
                   </Field>
                   <Field label="Password" htmlFor="password" hint={passwordMode === "signup" ? "At least 10 characters." : undefined}>
                     <Input
@@ -141,12 +139,11 @@ function LoginPage() {
                       autoComplete={passwordMode === "signin" ? "current-password" : "new-password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="h-10"
                     />
                   </Field>
                   {error ? <ErrorNote message={error} /> : null}
                   <Button type="submit" size="lg" loading={loading} className="w-full">
-                    {passwordMode === "signin" ? "Sign in" : "Create account"} <ArrowRight />
+                    {passwordMode === "signin" ? "Sign in" : "Create account"}
                   </Button>
                   <button
                     type="button"
@@ -158,9 +155,7 @@ function LoginPage() {
                 </form>
               )}
 
-              <p className="mt-8 flex items-center gap-2 text-xs text-faint">
-                <Lock className="size-3.5" /> AGMX is invite-only while in early access.
-              </p>
+              <p className="mt-8 text-[12.5px] text-muted">AGMX is invite-only during early access.</p>
             </div>
           )}
         </div>
@@ -171,43 +166,34 @@ function LoginPage() {
 }
 
 const ErrorNote = ({ message }: { message: string }) => (
-  <div className="animate-fade-in rounded-[10px] border border-danger/20 bg-danger-soft px-3 py-2 text-[13px] text-danger">{message}</div>
+  <div className="animate-fade-in rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-[13px] text-danger">{message}</div>
 )
 
 function AsidePanel() {
   const lines = [
     { t: "02:14:07", text: "POST /api/v1/signup", tone: "muted" },
     { t: "02:14:08", text: "→ approval requested · code KQ7M-3XPA", tone: "muted" },
-    { t: "02:14:31", text: "✓ approved by human", tone: "accent" },
+    { t: "02:14:31", text: "✓ approved", tone: "accent" },
     { t: "02:14:32", text: "inbox ready · scout@bot.agmx.io", tone: "ink" },
-    { t: "02:15:02", text: "GET /messages/wait …", tone: "muted" },
-    { t: "02:15:09", text: "✉ noreply@github.com — code 482913", tone: "accent" }
+    { t: "02:15:02", text: "GET /messages/wait", tone: "muted" },
+    { t: "02:15:09", text: "✉ noreply@github.com · code 482913", tone: "ink" }
   ]
   return (
-    <div className="relative hidden overflow-hidden border-l border-line bg-[#0b0b0c] lg:block">
-      <div className="absolute inset-0 opacity-[0.07] [background-image:linear-gradient(to_right,#fff_1px,transparent_1px),linear-gradient(to_bottom,#fff_1px,transparent_1px)] [background-size:48px_48px]" />
-      <div className="absolute -top-40 -right-40 size-[520px] rounded-full bg-accent/20 blur-[120px]" />
-      <div className="relative flex h-full flex-col justify-between p-12 text-white">
+    <div className="hidden border-l border-line bg-[#0b0b0c] lg:block dark:bg-[#0e0e10]">
+      <div className="flex h-full flex-col justify-between p-12 text-white">
         <div className="max-w-md">
-          <p className="font-mono text-xs tracking-widest text-accent uppercase">Agent Mailbox</p>
-          <h2 className="mt-4 text-4xl leading-[1.08] font-semibold tracking-[-0.035em] text-balance">Give every agent an inbox it can actually use.</h2>
-          <p className="mt-4 text-[15px] leading-relaxed text-white/60">Real addresses, verification codes extracted for you, threaded replies, webhooks and MCP — in one API call.</p>
+          <h2 className="text-3xl leading-[1.12] font-semibold tracking-[-0.03em] text-balance">Give every agent an inbox it can actually use.</h2>
+          <p className="mt-4 text-[15px] leading-relaxed text-white/55">Real addresses, verification codes extracted for you, threaded replies, webhooks and an MCP server.</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 font-mono text-[12.5px] backdrop-blur">
+        <div className="rounded-xl border border-white/10 p-5 font-mono text-[12.5px] leading-[1.9]">
           {lines.map((line, i) => (
-            <div key={i} className="flex gap-4 py-1 animate-rise" style={{ animationDelay: `${i * 120}ms` }}>
-              <span className="text-white/30">{line.t}</span>
-              <span className={line.tone === "accent" ? "text-accent" : line.tone === "ink" ? "text-white" : "text-white/55"}>{line.text}</span>
+            <div key={i} className="flex gap-4">
+              <span className="text-white/30 tabular-nums">{line.t}</span>
+              <span className={line.tone === "accent" ? "text-accent" : line.tone === "ink" ? "text-white" : "text-white/50"}>{line.text}</span>
             </div>
           ))}
-          <div className="mt-1 flex gap-4 py-1">
-            <span className="text-white/30">02:15:10</span>
-            <span className="inline-block h-4 w-2 animate-blink bg-accent" />
-          </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-white/50">
-          <CheckCircle2 className="size-4 text-accent" /> Open source · self-host on your own AWS SES
-        </div>
+        <p className="text-[13px] text-white/45">Open source · self-host on your own Amazon SES account</p>
       </div>
     </div>
   )

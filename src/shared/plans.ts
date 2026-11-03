@@ -82,7 +82,7 @@ export const PLANS: Record<PlanId, Plan> = {
     customDomains: 25,
     retentionDays: 365,
     maxMessageMb: 40,
-    features: ["250 agents", "25 inboxes per agent", "150,000 sends / month", "1M received / month", "25 custom domains", "Webhooks, MCP & REST", "1-year retention"]
+    features: ["250 agents", "25 inboxes per agent", "150,000 sends / month", "1M received / month", "25 custom domains", "REST API, MCP & webhooks", "1-year retention"]
   },
   unlimited: {
     id: "unlimited",

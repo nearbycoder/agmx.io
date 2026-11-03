@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { KeyRound } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "~/components/ui/button"
 import { Dialog, DialogContent } from "~/components/ui/dialog"
@@ -63,7 +62,7 @@ export const CreateKeyDialog = ({
                 Cancel
               </Button>
               <Button type="submit" form="create-key" loading={mutation.isPending} disabled={!name.trim()}>
-                <KeyRound /> Create key
+                Create key
               </Button>
             </>
           }
@@ -76,7 +75,7 @@ export const CreateKeyDialog = ({
               if (name.trim()) mutation.mutate()
             }}
           >
-            <Field label="Name" htmlFor="key-name" hint="Something to recognise it by, e.g. where it's deployed.">
+            <Field label="Name" htmlFor="key-name" hint="Something to recognize it by, such as where it runs.">
               <Input id="key-name" autoFocus maxLength={80} placeholder="Production worker" value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
             {fixedAgentId ? null : (

@@ -1,4 +1,4 @@
-import { Check, Inbox, KeyRound, Link2, Loader2, Sparkles } from "lucide-react"
+import { Check, Inbox, KeyRound, Link2, Loader2 } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { cn } from "~/lib/utils"
 
@@ -59,19 +59,13 @@ export function HeroDemo() {
 
   return (
     <div className="relative mx-auto w-full max-w-[560px] lg:max-w-none">
-      {/* Glow */}
-      <div className="pointer-events-none absolute -inset-10 -z-10 rounded-[48px] bg-[radial-gradient(closest-side,rgba(200,245,96,0.28),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,rgba(200,245,96,0.16),transparent)]" />
-
       {/* Terminal */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d0f] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.55)]">
-        <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-3">
-          <span className="size-2.5 rounded-full bg-[#ff5f57]" />
-          <span className="size-2.5 rounded-full bg-[#febc2e]" />
-          <span className="size-2.5 rounded-full bg-[#28c840]" />
-          <span className="ml-3 font-mono text-[11px] text-white/40">scout — agent runtime</span>
-          <span className="ml-auto flex items-center gap-1.5 font-mono text-[10.5px] text-white/35">
-            <span className="size-1.5 rounded-full bg-accent animate-pulse-dot" /> live
-          </span>
+      <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0d0d0f]">
+        <div className="flex h-10 items-center gap-1.5 border-b border-white/[0.07] px-4">
+          <span className="size-2.5 rounded-full bg-white/12" />
+          <span className="size-2.5 rounded-full bg-white/12" />
+          <span className="size-2.5 rounded-full bg-white/12" />
+          <span className="ml-3 font-mono text-[11px] text-white/35">scout — agent</span>
         </div>
         <div className="min-h-[300px] px-4 py-4 font-mono text-[12px] leading-[1.75] text-white/80 sm:min-h-[318px] sm:px-5 sm:text-[12.5px] lg:min-h-[380px] [overflow-wrap:anywhere]">
           <div>
@@ -118,19 +112,20 @@ export function HeroDemo() {
       {/* Inbox card */}
       <div
         className={cn(
-          "relative z-10 mx-3 -mt-10 rounded-2xl border border-line bg-surface/95 p-1.5 shadow-pop backdrop-blur transition-all duration-700 sm:mx-auto sm:w-[86%] lg:absolute lg:-right-6 lg:-bottom-20 lg:mt-0 lg:w-[74%] xl:-right-12",
+          "relative z-10 mx-3 -mt-10 rounded-xl border border-line bg-surface p-1.5 shadow-pop transition-all duration-700 sm:mx-auto sm:w-[86%] lg:absolute lg:right-0 lg:-bottom-14 lg:mt-0 lg:w-[74%]",
           arrived ? "translate-y-0 opacity-100" : "translate-y-3 opacity-90"
         )}
       >
         <div className="flex items-center justify-between px-3 pt-2 pb-2.5">
-          <div className="flex items-center gap-2 text-[12px] font-medium">
+          <div className="flex items-center gap-2 font-mono text-[12px] text-ink-2">
             <Inbox className="size-3.5 text-muted" /> scout@bot.agmx.io
           </div>
-          <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-semibold tabular-nums transition", arrived ? "bg-accent text-accent-fg" : "bg-bg-subtle text-muted")}>
-            {arrived ? "1 new" : "0 new"}
+          <span className={cn("flex items-center gap-1.5 text-[11.5px] tabular-nums transition-colors", arrived ? "text-ink" : "text-muted")}>
+            <span className={cn("size-1.5 rounded-full transition-colors", arrived ? "bg-accent" : "bg-line-strong")} />
+            {arrived ? "1 new" : "No new mail"}
           </span>
         </div>
-        <div className="overflow-hidden rounded-xl border border-line bg-surface-2">
+        <div className="overflow-hidden rounded-lg border border-line bg-surface-2">
           {arrived ? (
             <div className="animate-rise p-3.5 [animation-duration:.5s]">
               <div className="flex items-start gap-3">
@@ -149,10 +144,8 @@ export function HeroDemo() {
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
-                <span className="inline-flex items-center gap-1 text-[10.5px] font-medium tracking-wide text-faint uppercase">
-                  <Sparkles className="size-3" /> Extracted
-                </span>
-                <span className={cn("inline-flex items-center gap-1.5 rounded-md border border-accent/50 bg-accent-soft px-2 py-0.5 font-mono text-[12px] font-semibold text-accent-ink transition", step >= 7 && "shadow-glow")}>
+                <span className="text-[11.5px] text-muted">Extracted</span>
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-accent/60 bg-accent-soft px-2 py-0.5 font-mono text-[12px] font-semibold text-accent-ink">
                   <KeyRound className="size-3" /> 482913
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-0.5 text-[11.5px] text-ink-2">
@@ -170,7 +163,7 @@ export function HeroDemo() {
                 <div className="skeleton h-2.5 w-1/3 rounded" />
                 <div className="skeleton h-2.5 w-2/3 rounded" />
               </div>
-              <span className="text-[11px] text-faint">waiting…</span>
+              <span className="text-[11.5px] text-faint">Waiting…</span>
             </div>
           )}
         </div>

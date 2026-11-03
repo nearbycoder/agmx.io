@@ -3,10 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import {
   ArrowLeft,
   Check,
-  Eye,
-  EyeOff,
   Inbox as InboxIcon,
-  KeyRound,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -15,7 +12,6 @@ import {
   RefreshCw,
   Send,
   Trash2,
-  Webhook,
   Zap
 } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -24,18 +20,18 @@ import { useCompose } from "~/components/app/compose-context"
 import { Page } from "~/components/app/page"
 import { AgentAvatar } from "~/components/brand"
 import { ColorPicker, type AgentColorName } from "~/components/dashboard/color-picker"
-import { FailureNote, NativeSelect, origin, toastFailure } from "~/components/dashboard/common"
+import { FailureNote, NativeSelect, Notice, origin, SecretField, toastFailure } from "~/components/dashboard/common"
+import { Panel, PanelEmpty, Section } from "~/components/dashboard/section"
 import { connectSnippets } from "~/components/dashboard/connect"
 import { CreateKeyDialog } from "~/components/dashboard/create-key-dialog"
 import { usernameProblem } from "~/components/dashboard/username-hint"
-import { Badge, StatusDot } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import { Card, CardBody, CardHeader } from "~/components/ui/card"
 import { CodeTabs } from "~/components/ui/code"
 import { ConfirmDialog, Dialog, DialogContent } from "~/components/ui/dialog"
 import { AddonInput, Field, Input, Textarea } from "~/components/ui/input"
-import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
+import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from "~/components/ui/menu"
 import { CopyButton, EmptyState, Skeleton } from "~/components/ui/misc"
+import { Table, TBody, Td, Th, THead, Tr } from "~/components/ui/table"
 import { api, ApiFailure } from "~/lib/api"
 import { qk, useAgent, useApiKeys, useDeliveries, useDomains, useMe } from "~/lib/queries"
 import type { InboxT } from "~/shared/api/domain"
@@ -95,15 +91,15 @@ function AgentPage() {
       <Page>
         <Skeleton className="mb-3 h-4 w-24" />
         <div className="flex items-center gap-4">
-          <Skeleton className="size-14 rounded-[28%]" />
+          <Skeleton className="size-11 rounded-[10px]" />
           <div className="space-y-2">
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-4 w-72" />
           </div>
         </div>
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-          <Skeleton className="h-72 rounded-2xl" />
-          <Skeleton className="h-72 rounded-2xl" />
+        <div className="mt-10 flex max-w-4xl flex-col gap-8">
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
         </div>
       </Page>
     )
@@ -113,27 +109,28 @@ function AgentPage() {
 
   return (
     <Page>
-      <Link to="/app/agents" className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-ink">
+      <Link to="/app/agents" className="mb-5 inline-flex items-center gap-1.5 text-[13px] text-muted transition-colors hover:text-ink">
         <ArrowLeft className="size-3.5" /> Agents
       </Link>
 
-      <div className="flex flex-col gap-5 pb-8 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex max-w-4xl flex-col gap-5 pb-10 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          <AgentAvatar name={agent.name} color={agent.color} size="lg" className="size-14 text-[19px]" />
+          <AgentAvatar name={agent.name} color={agent.color} size="lg" />
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-[26px] leading-tight font-semibold tracking-[-0.03em]">{agent.name}</h1>
-              <Badge tone={paused ? "warn" : "ok"}>
-                <StatusDot tone={paused ? "warn" : "ok"} /> {agent.status}
-              </Badge>
+            <h1 className="truncate text-[22px] leading-tight font-semibold tracking-[-0.02em]">{agent.name}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[13px] text-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <span className={cn("size-1.5 rounded-full", paused ? "bg-warn" : "bg-ok")} />
+                {paused ? "Paused" : "Active"}
+              </span>
+              <span className="text-faint">·</span>
+              <span>Created {relativeTime(agent.createdAt)}</span>
             </div>
-            <p className="mt-1 max-w-2xl text-sm text-muted">{agent.description || "No description yet."}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[12px] text-faint">
-              <code className="truncate font-mono">{agent.id}</code>
+            <div className="mt-0.5 flex min-w-0 items-center text-muted">
+              <code className="truncate font-mono text-[12px]">{agent.id}</code>
               <CopyButton value={agent.id} size="xs" label="Agent id copied" />
-              <span className="mx-1 hidden sm:inline">·</span>
-              <span className="w-full sm:w-auto">created {relativeTime(agent.createdAt)}</span>
             </div>
+            {agent.description ? <p className="mt-2 max-w-2xl text-[13.5px] text-ink-2">{agent.description}</p> : null}
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -146,22 +143,13 @@ function AgentPage() {
         </div>
       </div>
 
-      {paused ? (
-        <div className="mb-6 rounded-xl border border-warn/25 bg-warn-soft px-4 py-3 text-[13px] text-warn">
-          This agent is paused. Incoming mail is dropped and sending is blocked until you resume it.
-        </div>
-      ) : null}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <InboxesCard agentId={agent.id} agentName={agent.name} inboxes={agent.inboxes} />
-          <WebhookCard agentId={agent.id} webhookUrl={agent.webhookUrl} secret={agent.webhookSecret} />
-        </div>
-        <div className="flex min-w-0 flex-col gap-6">
-          <KeysCard agentId={agent.id} />
-          <ConnectCard />
-          <DangerZone agentId={agent.id} name={agent.name} />
-        </div>
+      <div className="flex max-w-4xl flex-col gap-10">
+        {paused ? <Notice tone="warn">This agent is paused. Incoming mail is dropped and sending is blocked until you resume it.</Notice> : null}
+        <InboxesSection agentId={agent.id} agentName={agent.name} inboxes={agent.inboxes} />
+        <KeysSection agentId={agent.id} />
+        <WebhookSection agentId={agent.id} webhookUrl={agent.webhookUrl} secret={agent.webhookSecret} />
+        <ConnectSection />
+        <DangerZone agentId={agent.id} name={agent.name} />
       </div>
 
       <EditAgentDialog open={editing} onOpenChange={setEditing} agent={agent} />
@@ -240,7 +228,7 @@ function EditAgentDialog({
 
 // ---------------------------------------------------------------------------
 
-function InboxesCard({ agentId, agentName, inboxes }: { agentId: string; agentName: string; inboxes: ReadonlyArray<InboxT> }) {
+function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agentName: string; inboxes: ReadonlyArray<InboxT> }) {
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<InboxT | null>(null)
   const invalidate = useInvalidateAgent(agentId)
@@ -268,51 +256,49 @@ function InboxesCard({ agentId, agentName, inboxes }: { agentId: string; agentNa
   const limit = me?.plan.inboxesPerAgent ?? null
 
   return (
-    <Card>
-      <CardHeader
-        title="Inboxes"
-        description={limit === null ? "Addresses this agent sends and receives from." : `${inboxes.length} of ${limit} on your plan.`}
-        action={
-          <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
-            <Plus /> Add inbox
-          </Button>
-        }
-      />
+    <Section
+      title="Inboxes"
+      description={limit === null ? "Addresses this agent sends and receives from." : `${inboxes.length} of ${limit} allowed on your plan.`}
+      action={
+        <Button size="sm" variant="secondary" onClick={() => setAdding(true)}>
+          <Plus /> Add inbox
+        </Button>
+      }
+    >
       {inboxes.length === 0 ? (
-        <EmptyState
-          icon={<InboxIcon />}
-          title="No inbox yet"
-          description="Claim an address so this agent can receive verification emails and send mail."
-          action={
-            <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus /> Add inbox
-            </Button>
-          }
-        />
+        <Panel>
+          <EmptyState
+            icon={<InboxIcon />}
+            title="No inbox yet"
+            description="Add an address so this agent can receive verification emails and send mail."
+            action={
+              <Button size="sm" onClick={() => setAdding(true)}>
+                <Plus /> Add inbox
+              </Button>
+            }
+          />
+        </Panel>
       ) : (
-        <div className="divide-y divide-line">
+        <Panel divided>
           {inboxes.map((inbox) => (
-            <div key={inbox.id} className="flex items-center gap-3 px-5 py-3.5">
-              <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-xl border border-line", inbox.status === "active" ? "bg-accent-soft text-accent-ink" : "bg-warn-soft text-warn")}>
-                <InboxIcon className="size-4" />
-              </div>
+            <div key={inbox.id} className="flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1">
-                  <code className="truncate font-mono text-[13.5px] font-medium">{inbox.address}</code>
+                  <code className={cn("truncate font-mono text-[13.5px]", inbox.status === "paused" && "text-muted")}>{inbox.address}</code>
                   <CopyButton value={inbox.address} size="xs" label="Address copied" />
-                  {inbox.status === "paused" ? <Badge tone="warn">paused</Badge> : null}
+                  {inbox.status === "paused" ? <span className="ml-1 text-[12px] text-warn">Paused</span> : null}
                 </div>
-                <div className="mt-0.5 text-[12px] text-muted tabular-nums">
+                <div className="mt-0.5 text-[12.5px] text-muted tabular-nums">
                   {inbox.displayName ? `${inbox.displayName} · ` : ""}
-                  {inbox.messageCount.toLocaleString()} messages
-                  {inbox.unreadCount ? <span className="font-medium text-ink"> · {inbox.unreadCount} unread</span> : null}
+                  {inbox.messageCount.toLocaleString()} {inbox.messageCount === 1 ? "message" : "messages"}
+                  {inbox.unreadCount ? <span className="text-ink-2"> · {inbox.unreadCount} unread</span> : null}
                   {" · "}
                   {inbox.lastMessageAt ? `last ${relativeTime(inbox.lastMessageAt)}` : "no mail yet"}
                 </div>
               </div>
               <Link to="/app/mail" search={{ inbox: inbox.id }} className="hidden sm:block">
                 <Button size="sm" variant="ghost">
-                  Open
+                  Open in Mail
                 </Button>
               </Link>
               <DropdownMenu>
@@ -323,31 +309,31 @@ function InboxesCard({ agentId, agentName, inboxes }: { agentId: string; agentNa
                 </DropdownTrigger>
                 <DropdownContent>
                   <DropdownItem icon={<Send />} onSelect={() => compose.open({ from: inbox.address, subject: `Hello from ${agentName}` })}>
-                    Send email from here
+                    Send email from this inbox
                   </DropdownItem>
                   <DropdownItem icon={<InboxIcon />} onSelect={() => (window.location.href = `/app/mail?inbox=${inbox.id}`)}>
                     Open in Mail
                   </DropdownItem>
-{me?.devTools ? (
-                  <DropdownItem
-                    icon={<Zap />}
-                    onSelect={async () => {
-                      const res = await fetch("/api/dev/inbound", {
-                        method: "POST",
-                        headers: { "content-type": "application/json" },
-                        body: JSON.stringify({
-                          from: "AGMX Test <test@example.com>",
-                          to: inbox.address,
-                          subject: "Your AGMX verification code",
-                          text: `Hi ${agentName}!\n\nYour verification code is ${Math.floor(100000 + Math.random() * 900000)}.\n\nConfirm here: https://example.com/verify?token=demo`
+                  {me?.devTools ? (
+                    <DropdownItem
+                      icon={<Zap />}
+                      onSelect={async () => {
+                        const res = await fetch("/api/dev/inbound", {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            from: "AGMX Test <test@example.com>",
+                            to: inbox.address,
+                            subject: "Your AGMX verification code",
+                            text: `Hi ${agentName},\n\nYour verification code is ${Math.floor(100000 + Math.random() * 900000)}.\n\nConfirm here: https://example.com/verify?token=demo`
+                          })
                         })
-                      })
-                      if (res.ok) toast.success("Test email delivered")
-                      else toast.error("Test delivery is only available in development")
-                    }}
-                  >
-                    Simulate incoming email
-                  </DropdownItem>
+                        if (res.ok) toast.success("Test email delivered")
+                        else toast.error("Test delivery is only available in development")
+                      }}
+                    >
+                      Simulate incoming email
+                    </DropdownItem>
                   ) : null}
                   <DropdownSeparator />
                   <DropdownItem
@@ -363,7 +349,7 @@ function InboxesCard({ agentId, agentName, inboxes }: { agentId: string; agentNa
               </DropdownMenu>
             </div>
           ))}
-        </div>
+        </Panel>
       )}
       <AddInboxDialog open={adding} onOpenChange={setAdding} agentId={agentId} />
       <ConfirmDialog
@@ -375,7 +361,7 @@ function InboxesCard({ agentId, agentName, inboxes }: { agentId: string; agentNa
         loading={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
-    </Card>
+    </Section>
   )
 }
 
@@ -415,7 +401,7 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         title="Add inbox"
-        description="Agents can own several addresses — e.g. one per service they sign up for."
+        description="An agent can have several addresses, for example one per service it signs up for."
         footer={
           <>
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
@@ -472,11 +458,10 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
 
 // ---------------------------------------------------------------------------
 
-function WebhookCard({ agentId, webhookUrl, secret }: { agentId: string; webhookUrl: string | null; secret: string }) {
+function WebhookSection({ agentId, webhookUrl, secret }: { agentId: string; webhookUrl: string | null; secret: string }) {
   const invalidate = useInvalidateAgent(agentId)
   const queryClient = useQueryClient()
   const [url, setUrl] = useState(webhookUrl ?? "")
-  const [showSecret, setShowSecret] = useState(false)
   const [rotating, setRotating] = useState(false)
   const { data: deliveries, isLoading } = useDeliveries(agentId)
   useEffect(() => setUrl(webhookUrl ?? ""), [webhookUrl])
@@ -504,25 +489,19 @@ function WebhookCard({ agentId, webhookUrl, secret }: { agentId: string; webhook
     onSuccess: () => {
       invalidate()
       setRotating(false)
-      setShowSecret(true)
-      toast.success("Signing secret rotated — update your endpoint")
+      toast.success("Signing secret rotated. Update your endpoint.")
     },
     onError: (e) => toastFailure(e)
   })
 
   return (
-    <Card>
-      <CardHeader
-        title={
-          <span className="flex items-center gap-2">
-            <Webhook className="size-4 text-muted" /> Webhook
-          </span>
-        }
-        description="We POST signed JSON for message.received, message.sent, bounces and complaints. Failed deliveries retry with backoff for ~6 hours."
-      />
-      <CardBody className="flex flex-col gap-5">
+    <Section
+      title="Webhook"
+      description="Signed JSON events for received, sent, bounced and complained mail. Failed deliveries retry for about 6 hours."
+    >
+      <Panel divided>
         <form
-          className="flex flex-col gap-2 sm:flex-row"
+          className="flex flex-col gap-2 p-5 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault()
             save.mutate()
@@ -538,62 +517,59 @@ function WebhookCard({ agentId, webhookUrl, secret }: { agentId: string; webhook
             </Button>
           </div>
         </form>
-
-        <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[12px] font-medium text-muted">Signing secret</span>
-            <button onClick={() => setRotating(true)} className="inline-flex items-center gap-1 text-[12px] text-muted hover:text-ink">
+        <div className="flex flex-col gap-2 p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] font-medium text-ink-2">Signing secret</span>
+            <button onClick={() => setRotating(true)} className="inline-flex items-center gap-1 text-[12.5px] text-muted transition-colors hover:text-ink">
               <RefreshCw className="size-3" /> Rotate
             </button>
           </div>
-          <div className="flex items-center gap-1 rounded-[10px] border border-line bg-surface-2 py-1 pr-1 pl-3">
-            <code className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{showSecret ? secret : `whsec_${"•".repeat(28)}`}</code>
-            <button
-              onClick={() => setShowSecret((v) => !v)}
-              className="inline-flex size-7 items-center justify-center rounded-md text-muted transition hover:bg-bg-subtle hover:text-ink"
-              aria-label={showSecret ? "Hide secret" : "Reveal secret"}
-            >
-              {showSecret ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-            </button>
-            <CopyButton value={secret} label="Signing secret copied" />
-          </div>
-          <p className="mt-1.5 text-[12px] text-muted">
-            Verify <code className="font-mono">X-AGMX-Signature: t=…,v1=…</code> as HMAC-SHA256 of <code className="font-mono">{"`${t}.${body}`"}</code>.{" "}
+          <SecretField value={secret} masked={`whsec_${"•".repeat(28)}`} label="Signing secret" />
+          <p className="text-[12.5px] text-muted">
+            Verify the <code className="font-mono text-[12px]">X-AGMX-Signature</code> header as an HMAC-SHA256 of <code className="font-mono text-[12px]">{"{t}.{body}"}</code>.{" "}
             <Link to="/docs" hash="webhooks" className="underline underline-offset-2 hover:text-ink">
-              Docs
+              How to verify
             </Link>
           </p>
         </div>
+      </Panel>
 
-        <div>
-          <div className="mb-2 text-[12px] font-medium text-muted">Recent deliveries</div>
-          {isLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : deliveries?.length ? (
-            <div className="overflow-hidden rounded-xl border border-line">
-              <div className="scrollbar-thin max-h-72 divide-y divide-line overflow-y-auto">
-                {deliveries.map((d) => (
-                  <div key={d.id} className="flex items-center gap-3 px-3.5 py-2.5 text-[12.5px]">
-                    <StatusDot tone={d.status === "success" ? "ok" : d.status === "failed" ? "danger" : "warn"} />
-                    <code className="w-36 shrink-0 truncate font-mono text-[12px]">{d.event}</code>
-                    <span className="min-w-0 flex-1 truncate text-muted" title={d.lastError ?? undefined}>
-                      {d.status === "success" ? `Delivered${d.responseStatus ? ` · ${d.responseStatus}` : ""}` : d.lastError ?? (d.status === "pending" ? "Queued" : "Failed")}
-                    </span>
-                    <span className="hidden shrink-0 text-faint tabular-nums sm:inline">
-                      {d.attempts} {d.attempts === 1 ? "try" : "tries"}
-                    </span>
-                    <span className="shrink-0 text-faint tabular-nums">{relativeTime(d.createdAt)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-[12.5px] text-muted">
-              {webhookUrl ? "No deliveries yet. Send a test or wait for mail." : "Add a URL to start receiving events."}
-            </div>
-          )}
-        </div>
-      </CardBody>
+      <div className="mt-2 text-[13px] font-medium text-ink-2">Recent deliveries</div>
+      {isLoading ? (
+        <Skeleton className="h-24 w-full rounded-xl" />
+      ) : deliveries?.length ? (
+        <Table className="max-h-80">
+          <THead>
+            <Th>Event</Th>
+            <Th>Result</Th>
+            <Th className="hidden sm:table-cell">Attempts</Th>
+            <Th className="text-right">When</Th>
+          </THead>
+          <TBody>
+            {deliveries.map((d) => (
+              <Tr key={d.id}>
+                <Td>
+                  <span className="flex items-center gap-2">
+                    <span className={cn("size-1.5 shrink-0 rounded-full", d.status === "success" ? "bg-ok" : d.status === "failed" ? "bg-danger" : "bg-warn")} />
+                    <code className="font-mono text-[12.5px]">{d.event}</code>
+                  </span>
+                </Td>
+                <Td className="max-w-[280px]">
+                  <span className="block truncate text-muted" title={d.lastError ?? undefined}>
+                    {d.status === "success" ? `Delivered${d.responseStatus ? ` · HTTP ${d.responseStatus}` : ""}` : (d.lastError?.replace(/:\s*$/, "") ?? (d.status === "pending" ? "Queued" : "Failed"))}
+                  </span>
+                </Td>
+                <Td className="hidden text-muted tabular-nums sm:table-cell">{d.attempts}</Td>
+                <Td className="text-right whitespace-nowrap text-muted tabular-nums">{relativeTime(d.createdAt)}</Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      ) : (
+        <Panel>
+          <PanelEmpty>{webhookUrl ? "No deliveries yet. Send a test, or wait for mail to arrive." : "Add a URL to start receiving events."}</PanelEmpty>
+        </Panel>
+      )}
       <ConfirmDialog
         open={rotating}
         onOpenChange={setRotating}
@@ -603,13 +579,13 @@ function WebhookCard({ agentId, webhookUrl, secret }: { agentId: string; webhook
         loading={rotate.isPending}
         onConfirm={() => rotate.mutate()}
       />
-    </Card>
+    </Section>
   )
 }
 
 // ---------------------------------------------------------------------------
 
-function KeysCard({ agentId }: { agentId: string }) {
+function KeysSection({ agentId }: { agentId: string }) {
   const { data: keys, isLoading } = useApiKeys()
   const queryClient = useQueryClient()
   const [creating, setCreating] = useState(false)
@@ -625,41 +601,48 @@ function KeysCard({ agentId }: { agentId: string }) {
     onError: (e) => toastFailure(e)
   })
   return (
-    <Card>
-      <CardHeader
-        title="API keys"
-        description="Scoped to this agent's inboxes only."
-        action={
-          <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
-            <Plus /> New key
-          </Button>
-        }
-      />
+    <Section
+      title="API keys"
+      description="These keys can only use this agent's inboxes."
+      action={
+        <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
+          <Plus /> New key
+        </Button>
+      }
+    >
       {isLoading ? (
-        <div className="p-5">
-          <Skeleton className="h-10 w-full" />
-        </div>
+        <Skeleton className="h-16 w-full rounded-xl" />
       ) : agentKeys.length ? (
-        <div className="divide-y divide-line">
+        <Panel divided>
           {agentKeys.map((k) => (
             <div key={k.id} className="flex items-center gap-3 px-5 py-3">
-              <KeyRound className="size-4 shrink-0 text-faint" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13.5px] font-medium">{k.name}</div>
-                <div className="truncate font-mono text-[11.5px] text-muted">
-                  {k.prefix} · {k.lastUsedAt ? `used ${relativeTime(k.lastUsedAt)}` : "never used"}
+                <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-muted">
+                  <code className="font-mono text-[12px]">{k.prefix}</code>
+                  <span className="text-faint">·</span>
+                  {k.lastUsedAt ? `Used ${relativeTime(k.lastUsedAt)}` : "Never used"}
                 </div>
               </div>
-              <Tooltip content="Revoke key">
-                <Button size="icon-sm" variant="danger-ghost" onClick={() => setRevoking({ id: k.id, name: k.name })} aria-label={`Revoke ${k.name}`}>
-                  <Trash2 />
-                </Button>
-              </Tooltip>
+              <DropdownMenu>
+                <DropdownTrigger asChild>
+                  <Button size="icon-sm" variant="ghost" aria-label={`Actions for ${k.name}`}>
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownTrigger>
+                <DropdownContent>
+                  <DropdownItem icon={<Trash2 />} danger onSelect={() => setRevoking({ id: k.id, name: k.name })}>
+                    Revoke key
+                  </DropdownItem>
+                </DropdownContent>
+              </DropdownMenu>
             </div>
           ))}
-        </div>
+        </Panel>
       ) : (
-        <div className="px-5 py-6 text-center text-[13px] text-muted">No keys for this agent yet.</div>
+        <Panel>
+          <PanelEmpty>No keys for this agent yet.</PanelEmpty>
+        </Panel>
       )}
       <CreateKeyDialog open={creating} onOpenChange={setCreating} agentId={agentId} />
       <ConfirmDialog
@@ -671,25 +654,22 @@ function KeysCard({ agentId }: { agentId: string }) {
         loading={revoke.isPending}
         onConfirm={() => revoking && revoke.mutate(revoking.id)}
       />
-    </Card>
+    </Section>
   )
 }
 
-function ConnectCard() {
+function ConnectSection() {
   return (
-    <Card className="overflow-hidden">
-      <CardHeader title="Connect" description="Replace AGMX_KEY with one of this agent's keys." />
-      <div className="p-4">
-        <CodeTabs tabs={connectSnippets("$AGMX_KEY")} />
-        <p className="mt-3 text-[12px] text-muted">
-          Or let the agent read{" "}
-          <a href={`${origin()}/skill.md`} target="_blank" rel="noreferrer" className="font-mono text-ink underline underline-offset-2">
-            /skill.md
-          </a>{" "}
-          — it explains everything in agent-friendly terms.
-        </p>
-      </div>
-    </Card>
+    <Section title="Connect" description="Replace $AGMX_KEY with one of this agent's keys.">
+      <CodeTabs tabs={connectSnippets("$AGMX_KEY")} />
+      <p className="text-[12.5px] text-muted">
+        Or point the agent at{" "}
+        <a href={`${origin()}/skill.md`} target="_blank" rel="noreferrer" className="text-ink-2 underline underline-offset-2 hover:text-ink">
+          skill.md
+        </a>
+        , which explains the whole API for agents.
+      </p>
+    </Section>
   )
 }
 
@@ -710,14 +690,13 @@ function DangerZone({ agentId, name }: { agentId: string; name: string }) {
     onError: (e) => toastFailure(e)
   })
   return (
-    <Card className="border-danger/25">
-      <CardHeader title={<span className="text-danger">Danger zone</span>} />
-      <CardBody className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[13px] text-muted">Delete this agent with all its inboxes, messages, keys and webhook history.</p>
-        <Button variant="danger" size="sm" onClick={() => setOpen(true)}>
+    <Section title="Delete agent">
+      <Panel className="flex flex-col gap-3 border-danger/25 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[13px] text-muted">Permanently delete this agent with all of its inboxes, messages, keys and webhook history.</p>
+        <Button variant="secondary" size="sm" className="text-danger" onClick={() => setOpen(true)}>
           <Trash2 /> Delete agent
         </Button>
-      </CardBody>
+      </Panel>
       <Dialog
         open={open}
         onOpenChange={(o) => {
@@ -744,6 +723,6 @@ function DangerZone({ agentId, name }: { agentId: string; name: string }) {
           </Field>
         </DialogContent>
       </Dialog>
-    </Card>
+    </Section>
   )
 }

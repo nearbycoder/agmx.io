@@ -2,38 +2,38 @@ import type { ReactNode } from "react"
 import { Meter, Skeleton } from "~/components/ui/misc"
 import { cn } from "~/lib/utils"
 
-export const StatCard = ({
-  label,
-  value,
-  icon,
-  hint,
-  max,
-  used,
-  loading,
-  className
-}: {
+export interface Stat {
   label: string
   value: ReactNode
-  icon?: ReactNode
-  hint?: ReactNode
-  max?: number | null
+  caption?: ReactNode
   used?: number
-  loading?: boolean
-  className?: string
-}) => (
-  <div className={cn("flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card", className)}>
-    <div className="flex items-center justify-between">
-      <span className="text-[12.5px] font-medium text-muted">{label}</span>
-      {icon ? <span className="text-faint [&_svg]:size-4">{icon}</span> : null}
-    </div>
-    {loading ? (
-      <Skeleton className="mt-3 h-7 w-16" />
-    ) : (
-      <div className="mt-2 text-[26px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{value}</div>
-    )}
-    <div className="mt-auto pt-3">
-      {max !== undefined && max !== null && used !== undefined ? <Meter value={used} max={max} className="mb-2" /> : null}
-      {hint ? <div className="text-[12px] text-muted">{hint}</div> : null}
-    </div>
+  max?: number | null
+}
+
+/** One bordered strip split into cells by hairlines (instead of a row of cards). */
+export const StatStrip = ({ stats, loading, className }: { stats: ReadonlyArray<Stat>; loading?: boolean; className?: string }) => (
+  <div className={cn("grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-surface lg:grid-cols-4", className)}>
+    {stats.map((s, i) => (
+      <div
+        key={s.label}
+        className={cn(
+          "flex min-w-0 flex-col gap-1 p-5",
+          i % 2 === 1 && "border-l border-line",
+          i >= 2 && "border-t border-line lg:border-t-0",
+          i === 2 && "lg:border-l"
+        )}
+      >
+        <span className="text-[13px] text-muted">{s.label}</span>
+        {loading ? (
+          <Skeleton className="mt-1 h-7 w-16" />
+        ) : (
+          <span className="text-2xl leading-tight font-semibold tracking-[-0.02em] tabular-nums">{s.value}</span>
+        )}
+        <div className="mt-auto flex flex-col gap-2 pt-1">
+          {s.caption ? <span className="truncate text-[12px] text-muted">{s.caption}</span> : null}
+          {s.max !== undefined && s.max !== null && s.used !== undefined ? <Meter value={s.used} max={s.max} /> : null}
+        </div>
+      </div>
+    ))}
   </div>
 )
