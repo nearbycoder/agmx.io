@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Email inboxes for AI agents — TanStack Start, Effect, Drizzle, Better Auth and Amazon SES.",
+  "description": "Email inboxes for AI agents \u2014 TanStack Start, Effect, Drizzle, Better Auth and Amazon SES.",
   "license": "MIT",
   "engines": {
     "node": ">=22.6"
@@ -18,7 +18,8 @@
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "brand": "tsx scripts/brand-assets.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
@@ -63,6 +64,7 @@
     "@vitejs/plugin-react": "^6.2.1",
     "drizzle-kit": "^0.31.11",
     "nitro": "^3.0.261102-rc",
+    "playwright-core": "^1.64.1",
     "tailwindcss": "^4.3.4",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",

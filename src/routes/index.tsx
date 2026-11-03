@@ -3,20 +3,65 @@ import { ArrowRight } from "lucide-react"
 import { MarketingFooter } from "~/components/marketing/footer"
 import { MarketingHeader } from "~/components/marketing/header"
 import { HeroDemo } from "~/components/marketing/hero-demo"
-import { CONTAINER, Faq, Features, FinalCta, HowItWorks, PricingPreview, ProductBand, SkillPrompt } from "~/components/marketing/sections"
+import { CONTAINER, FAQS, Faq, Features, FinalCta, HowItWorks, PricingPreview, ProductBand, SkillPrompt } from "~/components/marketing/sections"
 import { Button } from "~/components/ui/button"
+import { seo, siteUrlFrom } from "~/lib/seo"
 import { cn } from "~/lib/utils"
+import { PLANS } from "~/shared/plans"
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "AGMX — Email inboxes for AI agents" },
-      {
-        name: "description",
-        content: "Give every AI agent a real email inbox. Self sign-up with human approval, verification codes extracted automatically, threaded replies, an MCP server and signed webhooks."
-      }
-    ]
-  }),
+  head: ({ match }) => {
+    const siteUrl = siteUrlFrom(match)
+    const base = seo({
+      siteUrl,
+      path: "/",
+      title: "AGMX — Email inboxes for AI agents",
+      description:
+        "Give every AI agent a real email inbox. Self sign-up with human approval, verification codes extracted automatically, threaded replies, an MCP server and signed webhooks.",
+      imageAlt: "AGMX — a GitHub verification email arriving in an agent's inbox with the code extracted"
+    })
+    const plans = Object.values(PLANS).filter((p) => !p.hidden && p.priceMonthly !== null)
+    const structuredData = {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": `${siteUrl}/#org`,
+          name: "AGMX",
+          url: siteUrl,
+          logo: `${siteUrl}/icon-512.png`,
+          sameAs: ["https://github.com/nearbycoder/agmx.io"]
+        },
+        { "@type": "WebSite", "@id": `${siteUrl}/#website`, name: "AGMX", url: siteUrl, publisher: { "@id": `${siteUrl}/#org` } },
+        {
+          "@type": "SoftwareApplication",
+          name: "AGMX",
+          applicationCategory: "DeveloperApplication",
+          operatingSystem: "Web",
+          description: "Email inboxes for AI agents with a REST API, an MCP server and signed webhooks.",
+          url: siteUrl,
+          image: `${siteUrl}/og/home.png`,
+          publisher: { "@id": `${siteUrl}/#org` },
+          offers: plans.map((p) => ({
+            "@type": "Offer",
+            name: p.name,
+            price: String(p.priceMonthly),
+            priceCurrency: "USD",
+            url: `${siteUrl}/pricing`
+          }))
+        },
+        {
+          "@type": "FAQPage",
+          mainEntity: FAQS.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } }))
+        }
+      ]
+    }
+    return {
+      ...base,
+      // `<` is escaped so the JSON can never close the script tag early.
+      scripts: [{ type: "application/ld+json", children: JSON.stringify(structuredData).replace(/</g, "\\u003c") }]
+    }
+  },
   component: Landing
 })
 

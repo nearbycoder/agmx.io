@@ -1,3 +1,4 @@
+import { seo, siteUrlFrom } from "~/lib/seo"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 import { ArrowRight, Bot, CheckCircle2, Clock, Globe, MonitorSmartphone, ShieldCheck, XCircle } from "lucide-react"
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/claim/$code")({
     if (!user) throw redirect({ to: "/login", search: { redirect: `/claim/${params.code}` } })
     return { user }
   },
-  head: () => ({ meta: [{ title: "Approve agent — AGMX" }] }),
+  head: ({ match }) => seo({ siteUrl: siteUrlFrom(match), path: "/claim", title: "An agent is asking for an inbox — AGMX", description: "Review and approve this agent to give it an AGMX email inbox and a scoped API key.", image: "/og/agents.png", noindex: true }),
   component: ClaimPage
 })
 

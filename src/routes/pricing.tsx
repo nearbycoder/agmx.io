@@ -1,3 +1,4 @@
+import { seo, siteUrlFrom } from "~/lib/seo"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { Check, Minus } from "lucide-react"
 import { MarketingFooter } from "~/components/marketing/footer"
@@ -7,12 +8,14 @@ import { cn } from "~/lib/utils"
 import { formatLimit, PLANS, type Plan } from "~/shared/plans"
 
 export const Route = createFileRoute("/pricing")({
-  head: () => ({
-    meta: [
-      { title: "Pricing — AGMX" },
-      { name: "description", content: "Simple plans for AI agent inboxes, priced by agents, inboxes and mail volume. Free to self-host." }
-    ]
-  }),
+  head: ({ match }) =>
+    seo({
+      siteUrl: siteUrlFrom(match),
+      path: "/pricing",
+      title: "Pricing — AGMX",
+      description: "Simple plans for AI agent inboxes, priced by agents, inboxes and mail volume. Start free, or self-host the open-source version.",
+      image: "/og/pricing.png"
+    }),
   component: PricingPage
 })
 

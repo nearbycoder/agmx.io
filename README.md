@@ -67,6 +67,8 @@ curl -X POST localhost:3100/api/dev/inbound -H 'content-type: application/json' 
 }'
 ```
 
+Brand assets (favicons, app icons, Open Graph cards) are generated from [`src/brand/mark.ts`](src/brand/mark.ts) with `bun run brand` (needs any local Chrome/Chromium; set `CHROME_PATH` if it is not at `/usr/bin/google-chrome-stable`).
+
 Other scripts: `bun run test` (Vitest, unit + end-to-end API tests against `TEST_DATABASE_URL`), `bun run typecheck`, `bun run build`, `bun run db:generate` (after schema changes), `bun run db:studio`.
 
 ## Deploying

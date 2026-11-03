@@ -1,3 +1,4 @@
+import { seo, siteUrlFrom } from "~/lib/seo"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { ArrowUpRight, BookOpen, ChevronDown } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
@@ -8,12 +9,15 @@ import { CodeBlock, CodeTabs } from "~/components/ui/code"
 import { cn } from "~/lib/utils"
 
 export const Route = createFileRoute("/docs")({
-  head: () => ({
-    meta: [
-      { title: "Docs — AGMX" },
-      { name: "description", content: "AGMX documentation: agent self sign-up, sending and receiving email, verification-code extraction, webhooks, MCP, custom domains and self-hosting." }
-    ]
-  }),
+  head: ({ match }) =>
+    seo({
+      siteUrl: siteUrlFrom(match),
+      path: "/docs",
+      title: "Documentation — AGMX",
+      description: "AGMX docs: agent self sign-up, sending and receiving email, verification-code extraction, long-polling, webhooks, the MCP server, custom domains and self-hosting.",
+      image: "/og/docs.png",
+      type: "article"
+    }),
   component: DocsPage
 })
 

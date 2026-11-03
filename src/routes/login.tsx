@@ -1,3 +1,4 @@
+import { seo, siteUrlFrom } from "~/lib/seo"
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router"
 import { KeyRound, Mail, Sparkles } from "lucide-react"
 import { useState } from "react"
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/login")({
     const user = await getSessionUser()
     if (user) throw redirect({ to: search.redirect ?? "/app" })
   },
-  head: () => ({ meta: [{ title: "Sign in — AGMX" }] }),
+  head: ({ match }) => seo({ siteUrl: siteUrlFrom(match), path: "/login", title: "Sign in — AGMX", noindex: true }),
   component: LoginPage
 })
 

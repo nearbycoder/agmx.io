@@ -1,3 +1,4 @@
+import { seo, siteUrlFrom } from "~/lib/seo"
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 import { ComposeWindow } from "~/components/app/compose"
 import { ComposeProvider } from "~/components/app/compose-context"
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/app")({
     if (!user) throw redirect({ to: "/login", search: { redirect: location.href } })
     return { user }
   },
-  head: () => ({ meta: [{ title: "AGMX" }] }),
+  head: ({ match }) => seo({ siteUrl: siteUrlFrom(match), path: "/app", title: "AGMX", noindex: true }),
   pendingComponent: () => (
     <div className="flex h-dvh items-center justify-center">
       <div className="size-6 animate-spin rounded-full border-2 border-line border-t-ink" />
