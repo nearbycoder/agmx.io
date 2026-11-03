@@ -79,6 +79,9 @@ export class Inbound extends Context.Service<Inbound, {
             dkim: receipt.dkimVerdict?.status ?? null,
             dmarc: receipt.dmarcVerdict?.status ?? null
           })
+          yield* Effect.logInfo(
+            `Inbound mail ${note.mail.messageId} (${raw.byteLength} bytes) for ${receipt.recipients.join(", ")} → delivered to ${result.delivered} inbox(es)`
+          )
           return { status: 200, message: `Delivered to ${result.delivered} inbox(es)` }
         }
         if (type === "Bounce" && note.bounce) {
