@@ -29,9 +29,44 @@ export interface Address {
   address: string
 }
 
+export interface ExtractedEvent {
+  title: string
+  start: string | null
+  end: string | null
+  allDay: boolean
+  location: string | null
+  organizer: string | null
+  url: string | null
+  method: string | null
+  uid: string | null
+}
+
+export interface ExtractedReceipt {
+  merchant: string | null
+  total: number | null
+  currency: string | null
+  orderNumber: string | null
+}
+
+export interface ExtractedTracking {
+  carrier: "ups" | "fedex" | "usps" | "dhl" | "other"
+  number: string
+  url: string | null
+}
+
 export interface Extracted {
   codes: Array<string>
-  links: Array<{ url: string; text?: string | null; kind: "verify" | "login" | "reset" | "unsubscribe" | "other" }>
+  links: Array<{ url: string; text?: string | null; kind: "verify" | "login" | "reset" | "unsubscribe" | "tracking" | "other" }>
+  events?: Array<ExtractedEvent>
+  receipt?: ExtractedReceipt | null
+  tracking?: Array<ExtractedTracking>
+}
+
+export interface Security {
+  risk: "low" | "medium" | "high"
+  score: number
+  reasons: Array<string>
+  hiddenContent: boolean
 }
 
 export interface Verdicts {
@@ -127,6 +162,10 @@ export const agents = pgTable(
     webhookUrl: text("webhook_url"),
     webhookSecret: text("webhook_secret").notNull(),
     status: text("status").notNull().default("active"),
+    /** When an agent key sends: `auto`, `first_contact` (new recipients need approval) or `all`. */
+    sendPolicy: text("send_policy").$type<"auto" | "first_contact" | "all">().notNull().default("auto"),
+    /** Hold any agent-sent message with attachments for approval. */
+    approveAttachments: boolean("approve_attachments").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt()
   },
@@ -167,6 +206,10 @@ export const inboxes = pgTable(
     address: text("address").notNull().unique(),
     displayName: text("display_name"),
     status: text("status").notNull().default("active"),
+    /** Temporary inboxes are deleted (with their mail) at this time. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /** Stop accepting mail after this many inbound messages. */
+    maxMessages: integer("max_messages"),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
     createdAt: createdAt()
   },
@@ -226,6 +269,14 @@ export const messages = pgTable(
     snippet: text("snippet").notNull().default(""),
     headers: jsonb("headers").$type<Record<string, string>>().notNull().default({}),
     extracted: jsonb("extracted").$type<Extracted>().notNull().default({ codes: [], links: [] }),
+    /** Prompt-injection / hidden-content analysis of inbound mail. */
+    security: jsonb("security").$type<Security>(),
+    /** Visible text only: hidden HTML and invisible characters removed. What agents should read. */
+    safeText: text("safe_text"),
+    idempotencyKey: text("idempotency_key"),
+    sendAt: timestamp("send_at", { withTimezone: true }),
+    decidedBy: text("decided_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
     verdicts: jsonb("verdicts").$type<Verdicts>().notNull().default({}),
     labels: jsonb("labels").$type<Array<string>>().notNull().default([]),
     isRead: boolean("is_read").notNull().default(false),
@@ -243,7 +294,9 @@ export const messages = pgTable(
     index("messages_user_created_idx").on(t.userId, t.createdAt),
     index("messages_rfc_idx").on(t.rfcMessageId),
     index("messages_alt_idx").on(t.altMessageId),
-    index("messages_provider_idx").on(t.providerMessageId)
+    index("messages_provider_idx").on(t.providerMessageId),
+    uniqueIndex("messages_idempotency_idx").on(t.userId, t.idempotencyKey),
+    index("messages_status_send_at_idx").on(t.status, t.sendAt)
   ]
 )
 
@@ -266,6 +319,8 @@ export const attachments = pgTable(
     content: bytea("content"),
     /** Object-storage key when ATTACHMENT_STORAGE=s3. */
     storageKey: text("storage_key"),
+    /** Text extracted from PDFs and other text-bearing attachments (truncated). */
+    extractedText: text("extracted_text"),
     createdAt: createdAt()
   },
   (t) => [index("attachments_message_idx").on(t.messageId)]
@@ -371,3 +426,26 @@ export const storageDeletions = pgTable("storage_deletions", {
   key: text("key").primaryKey(),
   createdAt: createdAt()
 })
+
+/** Per-inbox sender rules, evaluated in order before mail is stored. */
+export const inboxRules = pgTable(
+  "inbox_rules",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    inboxId: text("inbox_id")
+      .notNull()
+      .references(() => inboxes.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+    field: text("field").$type<"sender" | "domain" | "subject">().notNull(),
+    value: text("value").notNull(),
+    action: text("action").$type<"allow" | "block" | "label" | "forward" | "webhook">().notNull(),
+    /** Label name, forward address or webhook URL depending on `action`. */
+    target: text("target"),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: createdAt()
+  },
+  (t) => [index("inbox_rules_inbox_idx").on(t.inboxId, t.position)]
+)

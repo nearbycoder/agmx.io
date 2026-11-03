@@ -13,6 +13,9 @@ import { Webhooks } from "../services/Webhooks"
 
 const ok = { ok: true } as const
 
+/** The standard `Idempotency-Key` request header, if present. */
+const idempotencyHeader = Effect.map(Effect.service(HttpServerRequest.HttpServerRequest), (request) => request.headers["idempotency-key"]?.trim() || undefined)
+
 const SystemHandlers = HttpApiBuilder.group(AgmxApi, "system", (handlers) =>
   Effect.succeed(handlers.handle("health", () => Effect.succeed({ ok: true, version: "1.0.0" })))
 )
@@ -75,9 +78,14 @@ const MessagesHandlers = HttpApiBuilder.group(
       .handle("get", ({ params, query }) => Effect.flatMap(withPrincipal, (p) => mail.get(p, params.messageId, query.markRead === "true")))
       .handle("update", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => mail.update(p, params.messageId, payload)))
       .handle("delete", ({ params }) => Effect.flatMap(withPrincipal, (p) => mail.remove(p, params.messageId)).pipe(Effect.as(ok)))
-      .handle("send", ({ payload }) => Effect.flatMap(withPrincipal, (p) => mail.send(p, payload)))
-      .handle("reply", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => mail.reply(p, params.messageId, payload)))
-      .handle("forward", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => mail.forward(p, params.messageId, payload)))
+      .handle("send", ({ payload }) => Effect.flatMap(Effect.all([withPrincipal, idempotencyHeader]), ([p, key]) => mail.send(p, payload, key)))
+      .handle("reply", ({ params, payload }) =>
+        Effect.flatMap(Effect.all([withPrincipal, idempotencyHeader]), ([p, key]) => mail.reply(p, params.messageId, payload, key))
+      )
+      .handle("forward", ({ params, payload }) =>
+        Effect.flatMap(Effect.all([withPrincipal, idempotencyHeader]), ([p, key]) => mail.forward(p, params.messageId, payload, key))
+      )
+      .handle("cancel", ({ params }) => Effect.flatMap(withPrincipal, (p) => mail.cancelScheduled(p, params.messageId)))
       .handle("attachment", ({ params }) =>
         Effect.gen(function* () {
           const principal = yield* withPrincipal
@@ -119,6 +127,48 @@ const ThreadsHandlers = HttpApiBuilder.group(
     return handlers
       .handle("list", ({ query }) => Effect.flatMap(withPrincipal, (p) => mail.listThreads(p, query)))
       .handle("get", ({ params }) => Effect.flatMap(withPrincipal, (p) => mail.getThread(p, params.threadId)))
+  })
+)
+
+const DraftsHandlers = HttpApiBuilder.group(
+  AgmxApi,
+  "drafts",
+  Effect.fn(function* (handlers) {
+    const mail = yield* Mail
+    const withPrincipal = Effect.service(CurrentPrincipal)
+    return handlers
+      .handle("list", ({ query }) => Effect.flatMap(withPrincipal, (p) => mail.list(p, { ...query, folder: "drafts" })))
+      .handle("create", ({ payload }) => Effect.flatMap(withPrincipal, (p) => mail.createDraft(p, payload)))
+      .handle("update", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => mail.updateDraft(p, params.messageId, payload)))
+      .handle("delete", ({ params }) => Effect.flatMap(withPrincipal, (p) => mail.deleteDraft(p, params.messageId)).pipe(Effect.as(ok)))
+      .handle("send", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => mail.sendDraft(p, params.messageId, payload.sendAt)))
+  })
+)
+
+const ApprovalsHandlers = HttpApiBuilder.group(
+  AgmxApi,
+  "approvals",
+  Effect.fn(function* (handlers) {
+    const mail = yield* Mail
+    const withPrincipal = Effect.service(CurrentPrincipal)
+    return handlers
+      .handle("list", () => Effect.flatMap(withPrincipal, mail.listApprovals))
+      .handle("approve", ({ params }) => Effect.flatMap(withPrincipal, (p) => mail.approve(p, params.messageId)))
+      .handle("reject", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => mail.reject(p, params.messageId, payload.reason)))
+  })
+)
+
+const RulesHandlers = HttpApiBuilder.group(
+  AgmxApi,
+  "rules",
+  Effect.fn(function* (handlers) {
+    const agents = yield* Agents
+    const withPrincipal = Effect.service(CurrentPrincipal)
+    return handlers
+      .handle("list", ({ params }) => Effect.flatMap(withPrincipal, (p) => agents.listRules(p, params.inboxId)))
+      .handle("create", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => agents.createRule(p, params.inboxId, payload)))
+      .handle("update", ({ params, payload }) => Effect.flatMap(withPrincipal, (p) => agents.updateRule(p, params.ruleId, payload)))
+      .handle("delete", ({ params }) => Effect.flatMap(withPrincipal, (p) => agents.deleteRule(p, params.ruleId)).pipe(Effect.as(ok)))
   })
 )
 
@@ -202,6 +252,9 @@ export const HandlersLive = Layer.mergeAll(
   InboxesHandlers,
   MessagesHandlers,
   ThreadsHandlers,
+  DraftsHandlers,
+  ApprovalsHandlers,
+  RulesHandlers,
   DomainsHandlers,
   ApiKeysHandlers,
   SignupHandlers,

@@ -1,4 +1,4 @@
-import { and, count, eq, gte, sql } from "drizzle-orm"
+import { and, count, eq, gte, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { QuotaExceeded } from "~/shared/api/errors"
 import { getPlan, type Plan } from "~/shared/plans"
@@ -79,7 +79,8 @@ export class Quota extends Context.Service<Quota, {
         checkInboxes: Effect.fn("Quota.checkInboxes")(function* (userId, agentId) {
           const plan = yield* planFor(userId)
           if (plan.inboxesPerAgent === null) return
-          const [row] = yield* db.use((d) => d.select({ n: count() }).from(inboxes).where(eq(inboxes.agentId, agentId)))
+          // Temporary inboxes have their own cap and don't count against the plan.
+          const [row] = yield* db.use((d) => d.select({ n: count() }).from(inboxes).where(and(eq(inboxes.agentId, agentId), isNull(inboxes.expiresAt))))
           const used = row?.n ?? 0
           if (used >= plan.inboxesPerAgent)
             return yield* exceeded(

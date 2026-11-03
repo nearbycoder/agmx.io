@@ -14,7 +14,16 @@ import { toWebhookDelivery } from "../serialize"
 import { Agents } from "./Agents"
 import { Db } from "./Db"
 
-export type WebhookEvent = "message.received" | "message.sent" | "message.bounced" | "message.complained" | "message.delivered" | "webhook.test"
+export type WebhookEvent =
+  | "message.received"
+  | "message.sent"
+  | "message.bounced"
+  | "message.complained"
+  | "message.delivered"
+  | "message.held"
+  | "message.approved"
+  | "message.rejected"
+  | "webhook.test"
 
 const MAX_ATTEMPTS = 8
 
@@ -37,7 +46,8 @@ export const signPayload = (secret: string, body: string, timestamp = Math.floor
   `t=${timestamp},v1=${createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex")}`
 
 export class Webhooks extends Context.Service<Webhooks, {
-  enqueue(agentId: string, event: WebhookEvent, data: unknown): Effect.Effect<void>
+  /** Queue an event for the agent's webhook, or for `url` instead (inbox webhook rules). */
+  enqueue(agentId: string, event: WebhookEvent, data: unknown, url?: string): Effect.Effect<void>
   test(principal: Principal, agentId: string): Effect.Effect<typeof D.WebhookDelivery.Type, NotFound | InvalidRequest>
   list(principal: Principal, agentId: string): Effect.Effect<Array<typeof D.WebhookDelivery.Type>, NotFound>
   /** Deliver everything that's due. Safe to run concurrently across instances. */
@@ -130,12 +140,14 @@ export class Webhooks extends Context.Service<Webhooks, {
       })
 
       return Webhooks.of({
-        enqueue: (agentId, event, data) =>
+        enqueue: (agentId, event, data, urlOverride) =>
           Effect.gen(function* () {
-            const [agent] = yield* db.use((d) =>
+            const [row] = yield* db.use((d) =>
               d.select({ url: agents.webhookUrl, userId: agents.userId, status: agents.status }).from(agents).where(eq(agents.id, agentId)).limit(1)
             )
-            if (!agent?.url) return
+            if (!row) return
+            const agent = { ...row, url: urlOverride ?? row.url }
+            if (!agent.url) return
             const id = newId("evt")
             yield* db.use((d) =>
               d.insert(webhookDeliveries).values({

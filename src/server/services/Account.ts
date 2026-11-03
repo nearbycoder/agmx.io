@@ -199,6 +199,16 @@ export class Account extends Context.Service<Account, {
         Effect.forkScoped
       )
 
+      // Temporary inboxes: delete expired ones (messages and attachments cascade).
+      yield* db
+        .use((d) => d.delete(inboxes).where(sql`${inboxes.expiresAt} is not null and ${inboxes.expiresAt} < now()`))
+        .pipe(
+          Effect.catchCause((cause) => Effect.logError("Temporary inbox cleanup failed", cause)),
+          Effect.repeat(Schedule.spaced("1 minute")),
+          Effect.delay("15 seconds"),
+          Effect.forkScoped
+        )
+
       // Delete object-storage files for attachments removed from the database (queued by a trigger).
       const storage = yield* Storage
       const drain = Effect.gen(function* () {

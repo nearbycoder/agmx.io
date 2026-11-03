@@ -3,9 +3,9 @@ import { Context, Effect, Layer } from "effect"
 import type { Principal } from "~/shared/api/Authorization"
 import type * as D from "~/shared/api/domain"
 import { Conflict, Forbidden, InvalidRequest, NotFound, QuotaExceeded } from "~/shared/api/errors"
-import { normalizeUsername, RESERVED_USERNAMES, USERNAME_RE } from "~/shared/address"
-import { agents, apiKeys, domains, inboxes, messages, user } from "../db/schema"
-import type { AgentRow, InboxRow } from "../db/types"
+import { isValidEmail, normalizeUsername, RESERVED_USERNAMES, USERNAME_RE } from "~/shared/address"
+import { agents, apiKeys, domains, inboxes, inboxRules, messages, user } from "../db/schema"
+import type { AgentRow, InboxRow, InboxRuleRow } from "../db/types"
 import { env } from "../env"
 import { newId, randomToken, sha256 } from "../ids"
 import { toAgent, toInbox, type InboxStats } from "../serialize"
@@ -39,6 +39,51 @@ export interface CreateInboxInput {
   username?: string | undefined
   domain?: string | undefined
   displayName?: string | null | undefined
+  expiresIn?: number | undefined
+  maxMessages?: number | undefined
+  acceptFrom?: ReadonlyArray<string> | undefined
+}
+
+const MAX_TEMPORARY_PER_AGENT = 10
+const MIN_TTL = 60
+const MAX_TTL = 7 * 86_400
+
+const toRule = (row: InboxRuleRow): typeof D.InboxRule.Type => ({
+  id: row.id,
+  inboxId: row.inboxId,
+  position: row.position,
+  field: row.field,
+  value: row.value,
+  action: row.action,
+  target: row.target,
+  enabled: row.enabled,
+  createdAt: row.createdAt.toISOString()
+})
+
+const validateRule = (principal: Principal, rule: { field: string; value: string; action: string; target?: string | null | undefined }) => {
+  const value = rule.value.trim().toLowerCase()
+  if (rule.field === "sender" && !value.includes("@"))
+    return Effect.fail(new InvalidRequest({ message: "Sender rules need a full address, e.g. noreply@github.com. Use a domain rule for github.com.", field: "value" }))
+  if (rule.field === "domain" && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(value.replace(/^@/, "")))
+    return Effect.fail(new InvalidRequest({ message: "Domain rules need a domain such as github.com.", field: "value" }))
+  if ((rule.action === "forward" || rule.action === "webhook") && principal.kind === "agent_key")
+    return Effect.fail(new InvalidRequest({ message: "Forward and webhook rules can only be created by a human or an account key.", field: "action" }))
+  const target = rule.target?.trim() || null
+  if (rule.action === "label" && !target) return Effect.fail(new InvalidRequest({ message: "Label rules need a label name in `target`.", field: "target" }))
+  if (rule.action === "forward" && !(target && isValidEmail(target)))
+    return Effect.fail(new InvalidRequest({ message: "Forward rules need an email address in `target`.", field: "target" }))
+  if (rule.action === "webhook") {
+    try {
+      const url = new URL(target ?? "")
+      if (!["http:", "https:"].includes(url.protocol) || (env.isProduction && url.protocol !== "https:")) throw new Error("protocol")
+    } catch {
+      return Effect.fail(new InvalidRequest({ message: "Webhook rules need an https URL in `target`.", field: "target" }))
+    }
+  }
+  return Effect.succeed({
+    value: rule.field === "domain" ? value.replace(/^@/, "") : rule.field === "subject" ? rule.value.trim() : value,
+    target: rule.action === "label" ? target!.toLowerCase().slice(0, 40) : target
+  })
 }
 
 export class Agents extends Context.Service<Agents, {
@@ -53,7 +98,7 @@ export class Agents extends Context.Service<Agents, {
     userId: string,
     input: typeof D.CreateAgentPayload.Type
   ): Effect.Effect<{ agent: AgentRow; inbox: InboxRow | null }, QuotaExceeded | Conflict | InvalidRequest>
-  update(principal: Principal, agentId: string, input: typeof D.UpdateAgentPayload.Type): Effect.Effect<typeof D.Agent.Type, NotFound | InvalidRequest>
+  update(principal: Principal, agentId: string, input: typeof D.UpdateAgentPayload.Type): Effect.Effect<typeof D.Agent.Type, NotFound | InvalidRequest | Forbidden>
   remove(principal: Principal, agentId: string): Effect.Effect<void, NotFound | Forbidden>
   rotateWebhookSecret(principal: Principal, agentId: string): Effect.Effect<typeof D.AgentWithSecret.Type, NotFound>
   requireAgent(principal: Principal, agentId: string): Effect.Effect<AgentRow, NotFound>
@@ -73,6 +118,10 @@ export class Agents extends Context.Service<Agents, {
   createKey(principal: Principal, input: typeof D.CreateApiKeyPayload.Type): Effect.Effect<typeof D.CreatedApiKey.Type, NotFound | Forbidden>
   mintKey(userId: string, agentId: string | null, name: string): Effect.Effect<{ id: string; key: string }>
   revokeKey(principal: Principal, keyId: string): Effect.Effect<void, NotFound | Forbidden>
+  listRules(principal: Principal, inboxId: string): Effect.Effect<Array<typeof D.InboxRule.Type>, NotFound>
+  createRule(principal: Principal, inboxId: string, input: typeof D.CreateRulePayload.Type): Effect.Effect<typeof D.InboxRule.Type, NotFound | InvalidRequest>
+  updateRule(principal: Principal, ruleId: string, input: typeof D.UpdateRulePayload.Type): Effect.Effect<typeof D.InboxRule.Type, NotFound | InvalidRequest>
+  deleteRule(principal: Principal, ruleId: string): Effect.Effect<void, NotFound>
   /** Resolve a bearer API key to a principal. */
   authenticate(key: string): Effect.Effect<Principal | null>
 }>()("agmx/services/Agents") {
@@ -165,10 +214,36 @@ export class Agents extends Context.Service<Agents, {
         userId: string,
         input: CreateInboxInput
       ): Effect.fn.Return<InboxRow, QuotaExceeded | Conflict | InvalidRequest> {
-        yield* quota.checkInboxes(userId, input.agentId)
+        const temporary = input.expiresIn !== undefined
+        if (temporary) {
+          if (!Number.isInteger(input.expiresIn) || input.expiresIn! < MIN_TTL || input.expiresIn! > MAX_TTL)
+            return yield* new InvalidRequest({ message: `expiresIn must be between ${MIN_TTL} seconds and ${MAX_TTL / 86_400} days.`, field: "expiresIn" })
+          const [row] = yield* db.use((d) =>
+            d
+              .select({ n: count() })
+              .from(inboxes)
+              .where(and(eq(inboxes.agentId, input.agentId), sql`${inboxes.expiresAt} is not null and ${inboxes.expiresAt} > now()`))
+          )
+          if ((row?.n ?? 0) >= MAX_TEMPORARY_PER_AGENT)
+            return yield* new QuotaExceeded({
+              limit: "inboxes_per_agent",
+              max: MAX_TEMPORARY_PER_AGENT,
+              used: row?.n ?? 0,
+              message: `An agent can have at most ${MAX_TEMPORARY_PER_AGENT} temporary inboxes at once.`
+            })
+        } else {
+          yield* quota.checkInboxes(userId, input.agentId)
+        }
+        if (input.maxMessages !== undefined && (!Number.isInteger(input.maxMessages) || input.maxMessages < 1 || input.maxMessages > 10_000))
+          return yield* new InvalidRequest({ message: "maxMessages must be between 1 and 10,000.", field: "maxMessages" })
+        const acceptFrom = (input.acceptFrom ?? []).map((v) => v.trim().toLowerCase()).filter(Boolean)
+        for (const sender of acceptFrom) {
+          if (!sender.includes("@") && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(sender.replace(/^@/, "")))
+            return yield* new InvalidRequest({ message: `"${sender}" isn't an address or domain.`, field: "acceptFrom" })
+        }
         const { domain, domainId } = yield* resolveDomain(userId, input.domain)
         const explicit = input.username !== undefined && input.username.trim() !== ""
-        const localPart = explicit ? normalizeUsername(input.username!) : randomUsername()
+        const localPart = explicit ? normalizeUsername(input.username!) : temporary ? `tmp-${randomUsername()}` : randomUsername()
         if (!USERNAME_RE.test(localPart))
           return yield* new InvalidRequest({
             message: "Usernames may contain lowercase letters, numbers, dots, dashes and underscores (max 64 characters).",
@@ -192,7 +267,9 @@ export class Agents extends Context.Service<Agents, {
               localPart,
               domain,
               address,
-              displayName: input.displayName ?? null
+              displayName: input.displayName ?? null,
+              expiresAt: temporary ? new Date(Date.now() + input.expiresIn! * 1000) : null,
+              maxMessages: input.maxMessages ?? null
             })
             .returning()
         )
@@ -200,7 +277,23 @@ export class Agents extends Context.Service<Agents, {
           if (!explicit) return yield* createInboxForUser(userId, input)
           return yield* new Conflict({ message: `${address} is already taken. Try another username.` })
         }
-        return inserted[0]!
+        const inbox = inserted[0]!
+        if (acceptFrom.length) {
+          yield* db.use((d) =>
+            d.insert(inboxRules).values(
+              acceptFrom.map((sender, position) => ({
+                id: newId("rul"),
+                userId,
+                inboxId: inbox.id,
+                position,
+                field: sender.includes("@") ? ("sender" as const) : ("domain" as const),
+                value: sender.replace(/^@/, ""),
+                action: "allow" as const
+              }))
+            )
+          )
+        }
+        return inbox
       })
 
       const createForUser = Effect.fn("Agents.createForUser")(function* (userId: string, input: typeof D.CreateAgentPayload.Type) {
@@ -218,7 +311,9 @@ export class Agents extends Context.Service<Agents, {
                   description: input.description?.trim() || null,
                   color: input.color ?? "lime",
                   webhookUrl: webhookUrl ?? null,
-                  webhookSecret: `whsec_${randomToken(32)}`
+                  webhookSecret: `whsec_${randomToken(32)}`,
+                  sendPolicy: input.sendPolicy ?? "auto",
+                  approveAttachments: input.approveAttachments ?? false
                 })
                 .returning()
             )
@@ -282,8 +377,12 @@ export class Agents extends Context.Service<Agents, {
 
         update: Effect.fn("Agents.update")(function* (principal, agentId, input) {
           yield* requireAgent(principal, agentId)
+          if (principal.kind === "agent_key" && (input.sendPolicy !== undefined || input.approveAttachments !== undefined))
+            return yield* new Forbidden({ message: "An agent can't change its own send policy. Ask a human to update it in the dashboard." })
           const webhookUrl = yield* validateWebhookUrl(input.webhookUrl)
           const patch: Partial<typeof agents.$inferInsert> = {}
+          if (input.sendPolicy !== undefined) patch.sendPolicy = input.sendPolicy
+          if (input.approveAttachments !== undefined) patch.approveAttachments = input.approveAttachments
           if (input.name !== undefined) patch.name = input.name.trim()
           if (input.description !== undefined) patch.description = input.description?.trim() || null
           if (input.color !== undefined) patch.color = input.color
@@ -330,7 +429,15 @@ export class Agents extends Context.Service<Agents, {
           const agentId = principal.agentId ?? input.agentId
           if (!agentId) return yield* new InvalidRequest({ message: "agentId is required.", field: "agentId" })
           yield* requireAgent(principal, agentId)
-          const row = yield* createInboxForUser(principal.userId, { agentId, username: input.username, domain: input.domain, displayName: input.displayName })
+          const row = yield* createInboxForUser(principal.userId, {
+            agentId,
+            username: input.username,
+            domain: input.domain,
+            displayName: input.displayName,
+            expiresIn: input.expiresIn,
+            maxMessages: input.maxMessages,
+            acceptFrom: input.acceptFrom
+          })
           return toInbox(row)
         }),
         createInboxForUser,
@@ -382,6 +489,71 @@ export class Agents extends Context.Service<Agents, {
               .returning({ id: apiKeys.id })
           )
           if (result.length === 0) return yield* new NotFound({ message: "API key not found.", resource: "api_key" })
+        }),
+
+        listRules: Effect.fn("Agents.listRules")(function* (principal, inboxId) {
+          const inbox = yield* requireInbox(principal, inboxId)
+          const rows = yield* db.use((d) => d.select().from(inboxRules).where(eq(inboxRules.inboxId, inbox.id)).orderBy(inboxRules.position, inboxRules.createdAt))
+          return rows.map(toRule)
+        }),
+
+        createRule: Effect.fn("Agents.createRule")(function* (principal, inboxId, input) {
+          const inbox = yield* requireInbox(principal, inboxId)
+          const [existing] = yield* db.use((d) => d.select({ n: count() }).from(inboxRules).where(eq(inboxRules.inboxId, inbox.id)))
+          if ((existing?.n ?? 0) >= 50) return yield* new InvalidRequest({ message: "An inbox can have at most 50 rules." })
+          const clean = yield* validateRule(principal, input)
+          const [row] = yield* db.use((d) =>
+            d
+              .insert(inboxRules)
+              .values({
+                id: newId("rul"),
+                userId: inbox.userId,
+                inboxId: inbox.id,
+                position: input.position ?? existing?.n ?? 0,
+                field: input.field,
+                value: clean.value,
+                action: input.action,
+                target: clean.target,
+                enabled: input.enabled ?? true
+              })
+              .returning()
+          )
+          return toRule(row!)
+        }),
+
+        updateRule: Effect.fn("Agents.updateRule")(function* (principal, ruleId, input) {
+          const [current] = yield* db.use((d) => d.select().from(inboxRules).where(and(eq(inboxRules.id, ruleId), eq(inboxRules.userId, principal.userId))).limit(1))
+          if (!current) return yield* new NotFound({ message: "Rule not found.", resource: "rule" })
+          yield* requireInbox(principal, current.inboxId)
+          const merged = {
+            field: input.field ?? current.field,
+            value: input.value ?? current.value,
+            action: input.action ?? current.action,
+            target: input.target !== undefined ? input.target : current.target
+          }
+          const clean = yield* validateRule(principal, merged)
+          const [row] = yield* db.use((d) =>
+            d
+              .update(inboxRules)
+              .set({
+                field: merged.field,
+                value: clean.value,
+                action: merged.action,
+                target: clean.target,
+                ...(input.position !== undefined ? { position: input.position } : {}),
+                ...(input.enabled !== undefined ? { enabled: input.enabled } : {})
+              })
+              .where(eq(inboxRules.id, ruleId))
+              .returning()
+          )
+          return toRule(row!)
+        }),
+
+        deleteRule: Effect.fn("Agents.deleteRule")(function* (principal, ruleId) {
+          const [current] = yield* db.use((d) => d.select().from(inboxRules).where(and(eq(inboxRules.id, ruleId), eq(inboxRules.userId, principal.userId))).limit(1))
+          if (!current) return yield* new NotFound({ message: "Rule not found.", resource: "rule" })
+          yield* requireInbox(principal, current.inboxId)
+          yield* db.use((d) => d.delete(inboxRules).where(eq(inboxRules.id, ruleId)))
         }),
 
         authenticate: (key) =>

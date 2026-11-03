@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Email inboxes for AI agents \u2014 TanStack Start, Effect, Drizzle, Better Auth and Amazon SES.",
+  "description": "Email inboxes for AI agents — TanStack Start, Effect, Drizzle, Better Auth and Amazon SES.",
   "license": "MIT",
   "engines": {
     "node": ">=22.6"
@@ -46,13 +46,15 @@
     "effect": "^4.1.2",
     "lucide-react": "^1.66.0",
     "motion": "^14.9.0",
+    "node-html-parser": "^9.0.6",
     "nodemailer": "^10.3.1",
     "postal-mime": "^4.2.0",
     "postgres": "^4.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "sonner": "^2.0.8",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "unpdf": "^2.1.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.4",

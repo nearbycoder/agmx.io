@@ -5,7 +5,7 @@ import { Db } from "./services/Db"
 import { Domains } from "./services/Domains"
 import { Events } from "./services/Events"
 import { Inbound } from "./services/Inbound"
-import { Mail } from "./services/Mail"
+import { Mail, ScheduledSendWorker } from "./services/Mail"
 import { MailTransport } from "./services/MailTransport"
 import { Quota } from "./services/Quota"
 import { Signups } from "./services/Signups"
@@ -32,7 +32,7 @@ export const ServicesLive = Layer.mergeAll(
 )
 
 /** Background fibers: webhook delivery and housekeeping. */
-const WorkersLive = Layer.mergeAll(Webhooks.worker, Account.maintenance).pipe(Layer.provide(ServicesLive))
+const WorkersLive = Layer.mergeAll(Webhooks.worker, Account.maintenance, ScheduledSendWorker).pipe(Layer.provide(ServicesLive))
 
 export const AppLayer = Layer.mergeAll(ServicesLive, WorkersLive)
 

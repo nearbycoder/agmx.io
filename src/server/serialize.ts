@@ -20,6 +20,9 @@ export const toInbox = (row: InboxRow, stats?: InboxStats): typeof D.Inbox.Type 
   status: row.status,
   unreadCount: stats?.unreadCount ?? 0,
   messageCount: stats?.messageCount ?? 0,
+  temporary: row.expiresAt !== null,
+  expiresAt: isoOrNull(row.expiresAt),
+  maxMessages: row.maxMessages,
   lastMessageAt: isoOrNull(row.lastMessageAt),
   createdAt: iso(row.createdAt)
 })
@@ -31,6 +34,8 @@ export const toAgent = (row: AgentRow, inboxes: ReadonlyArray<typeof D.Inbox.Typ
   color: row.color,
   status: row.status,
   webhookUrl: row.webhookUrl,
+  sendPolicy: row.sendPolicy,
+  approveAttachments: row.approveAttachments,
   inboxes: [...inboxes],
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt)
@@ -46,7 +51,17 @@ export const toAttachment = (row: Omit<AttachmentRow, "content" | "storageKey" |
   size: row.size,
   inline: row.inline,
   contentId: row.contentId,
-  downloadUrl: attachmentUrl(row.messageId, row.id)
+  downloadUrl: attachmentUrl(row.messageId, row.id),
+  extractedText: row.extractedText
+})
+
+/** Older rows predate events/receipts/tracking; fill in empty values. */
+const normalizeExtracted = (e: MessageRow["extracted"]): typeof D.Extracted.Type => ({
+  codes: e.codes ?? [],
+  links: e.links ?? [],
+  events: e.events ?? [],
+  receipt: e.receipt ?? null,
+  tracking: e.tracking ?? []
 })
 
 export const toMessageSummary = (row: MessageRow, attachmentCount = 0): typeof D.MessageSummary.Type => ({
@@ -60,7 +75,9 @@ export const toMessageSummary = (row: MessageRow, attachmentCount = 0): typeof D
   cc: row.cc,
   subject: row.subject,
   snippet: row.snippet,
-  extracted: row.extracted,
+  extracted: normalizeExtracted(row.extracted),
+  security: row.security,
+  sendAt: isoOrNull(row.sendAt),
   labels: row.labels,
   isRead: row.isRead,
   isStarred: row.isStarred,
@@ -79,6 +96,7 @@ export const toMessage = (
   replyTo: row.replyTo,
   text: row.text,
   html: row.html,
+  safeText: row.safeText,
   headers: row.headers,
   rfcMessageId: row.rfcMessageId,
   inReplyTo: row.inReplyTo,

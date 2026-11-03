@@ -54,7 +54,7 @@ export class AgentsGroup extends HttpApiGroup.make("agents")
       params: IdParam("agentId"),
       payload: D.UpdateAgentPayload,
       success: D.Agent,
-      error: [NotFound, InvalidRequest]
+      error: [NotFound, InvalidRequest, Forbidden]
     }).annotateMerge(doc("Update an agent")),
     HttpApiEndpoint.delete("delete", "/agents/:agentId", {
       params: IdParam("agentId"),
@@ -121,7 +121,7 @@ export class MessagesGroup extends HttpApiGroup.make("messages")
         agentId: Schema.optional(Schema.String),
         threadId: Schema.optional(Schema.String),
         direction: Schema.optional(Schema.Literals(["inbound", "outbound"])),
-        folder: Schema.optional(Schema.Literals(["inbox", "sent", "starred", "archived", "spam", "all"])),
+        folder: Schema.optional(Schema.Literals(["inbox", "sent", "starred", "archived", "spam", "drafts", "scheduled", "pending", "all"])),
         unread: Schema.optional(Schema.Literals(["true", "false"])),
         q: Schema.optional(Schema.String),
         since: Schema.optional(Schema.String),
@@ -166,19 +166,29 @@ export class MessagesGroup extends HttpApiGroup.make("messages")
     HttpApiEndpoint.post("send", "/messages", {
       payload: D.SendMessagePayload,
       success: D.Message,
-      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, DeliveryFailed]
-    }).annotateMerge(doc("Send an email", "Sends from one of your inboxes. Each recipient counts toward your plan's send quota.")),
+      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, DeliveryFailed, Conflict]
+    }).annotateMerge(
+      doc(
+        "Send an email",
+        "Sends from one of your inboxes. Each recipient counts toward your plan's send quota. Pass `sendAt` to schedule. Send an `Idempotency-Key` header (or `idempotencyKey`) so retries never send twice. If the agent's send policy requires approval, the message is returned with status `pending_approval` and sent once a human approves it."
+      )
+    ),
+    HttpApiEndpoint.post("cancel", "/messages/:messageId/cancel", {
+      params: IdParam("messageId"),
+      success: D.Message,
+      error: [NotFound, Conflict]
+    }).annotateMerge(doc("Cancel a scheduled send", "Moves a `scheduled` message back to drafts.")),
     HttpApiEndpoint.post("reply", "/messages/:messageId/reply", {
       params: IdParam("messageId"),
       payload: D.ReplyPayload,
       success: D.Message,
-      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, DeliveryFailed]
+      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, DeliveryFailed, Conflict]
     }).annotateMerge(doc("Reply to a message", "Threads correctly via In-Reply-To/References. Set `replyAll` to include all original recipients.")),
     HttpApiEndpoint.post("forward", "/messages/:messageId/forward", {
       params: IdParam("messageId"),
       payload: D.ForwardPayload,
       success: D.Message,
-      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, DeliveryFailed]
+      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, DeliveryFailed, Conflict]
     }).annotateMerge(doc("Forward a message")),
     HttpApiEndpoint.get("attachment", "/messages/:messageId/attachments/:attachmentId", {
       params: { messageId: Schema.String, attachmentId: Schema.String },
@@ -209,6 +219,89 @@ export class ThreadsGroup extends HttpApiGroup.make("threads")
   )
   .middleware(Authorization)
   .annotateMerge(OpenApi.annotations({ title: "Threads" }))
+{}
+
+export class DraftsGroup extends HttpApiGroup.make("drafts")
+  .add(
+    HttpApiEndpoint.get("list", "/drafts", {
+      query: { inboxId: Schema.optional(Schema.String), limit: Schema.optional(Schema.Int), cursor: Schema.optional(Schema.String) },
+      success: D.MessagePage
+    }).annotateMerge(doc("List drafts")),
+    HttpApiEndpoint.post("create", "/drafts", {
+      payload: D.DraftPayload,
+      success: D.Message,
+      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, Conflict, DeliveryFailed]
+    }).annotateMerge(doc("Create a draft", "Everything is optional. Pass `replyToMessageId` to start a threaded reply.")),
+    HttpApiEndpoint.patch("update", "/drafts/:messageId", {
+      params: IdParam("messageId"),
+      payload: D.DraftPayload,
+      success: D.Message,
+      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, Conflict, DeliveryFailed]
+    }).annotateMerge(doc("Update a draft", "Fields you pass replace the draft's values. Passing `attachments` replaces all attachments.")),
+    HttpApiEndpoint.delete("delete", "/drafts/:messageId", {
+      params: IdParam("messageId"),
+      success: Schema.Struct({ ok: Schema.Boolean }),
+      error: [NotFound, Conflict]
+    }).annotateMerge(doc("Delete a draft")),
+    HttpApiEndpoint.post("send", "/drafts/:messageId/send", {
+      params: IdParam("messageId"),
+      payload: D.SendDraftPayload,
+      success: D.Message,
+      error: [QuotaExceeded, InvalidRequest, NotFound, Forbidden, Conflict, DeliveryFailed]
+    }).annotateMerge(doc("Send a draft", "Sends now, or at `sendAt`. Subject to the agent's send policy."))
+  )
+  .middleware(Authorization)
+  .annotateMerge(OpenApi.annotations({ title: "Drafts & scheduling" }))
+{}
+
+export class ApprovalsGroup extends HttpApiGroup.make("approvals")
+  .add(
+    HttpApiEndpoint.get("list", "/approvals", { success: Schema.Array(D.Message), error: Forbidden }).annotateMerge(
+      doc("Messages waiting for approval", "Outbound mail held by an agent's send policy. Humans and account keys only.")
+    ),
+    HttpApiEndpoint.post("approve", "/approvals/:messageId/approve", {
+      params: IdParam("messageId"),
+      success: D.Message,
+      error: [NotFound, Forbidden, Conflict, QuotaExceeded, InvalidRequest, DeliveryFailed]
+    }).annotateMerge(doc("Approve and send")),
+    HttpApiEndpoint.post("reject", "/approvals/:messageId/reject", {
+      params: IdParam("messageId"),
+      payload: D.RejectPayload,
+      success: D.Message,
+      error: [NotFound, Forbidden, Conflict]
+    }).annotateMerge(doc("Reject", "The message is never sent. The agent is notified by webhook."))
+  )
+  .middleware(Authorization)
+  .annotateMerge(OpenApi.annotations({ title: "Send approvals" }))
+{}
+
+export class RulesGroup extends HttpApiGroup.make("rules")
+  .add(
+    HttpApiEndpoint.get("list", "/inboxes/:inboxId/rules", {
+      params: IdParam("inboxId"),
+      success: Schema.Array(D.InboxRule),
+      error: NotFound
+    }).annotateMerge(doc("List an inbox's sender rules")),
+    HttpApiEndpoint.post("create", "/inboxes/:inboxId/rules", {
+      params: IdParam("inboxId"),
+      payload: D.CreateRulePayload,
+      success: D.InboxRule,
+      error: [NotFound, InvalidRequest]
+    }).annotateMerge(doc("Add a sender rule")),
+    HttpApiEndpoint.patch("update", "/rules/:ruleId", {
+      params: IdParam("ruleId"),
+      payload: D.UpdateRulePayload,
+      success: D.InboxRule,
+      error: [NotFound, InvalidRequest]
+    }).annotateMerge(doc("Update a sender rule")),
+    HttpApiEndpoint.delete("delete", "/rules/:ruleId", {
+      params: IdParam("ruleId"),
+      success: Schema.Struct({ ok: Schema.Boolean }),
+      error: NotFound
+    }).annotateMerge(doc("Delete a sender rule"))
+  )
+  .middleware(Authorization)
+  .annotateMerge(OpenApi.annotations({ title: "Sender rules" }))
 {}
 
 export class DomainsGroup extends HttpApiGroup.make("domains")
@@ -329,6 +422,9 @@ export class AgmxApi extends HttpApi.make("agmx")
   .add(InboxesGroup)
   .add(MessagesGroup)
   .add(ThreadsGroup)
+  .add(DraftsGroup)
+  .add(ApprovalsGroup)
+  .add(RulesGroup)
   .add(DomainsGroup)
   .add(ApiKeysGroup)
   .add(AgentSignupGroup)

@@ -11,3 +11,4 @@ export type AttachmentRow = InferSelectModel<typeof s.attachments>
 export type ApiKeyRow = InferSelectModel<typeof s.apiKeys>
 export type WebhookDeliveryRow = InferSelectModel<typeof s.webhookDeliveries>
 export type SignupRow = InferSelectModel<typeof s.agentSignups>
+export type InboxRuleRow = InferSelectModel<typeof s.inboxRules>
