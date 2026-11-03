@@ -91,7 +91,7 @@ export class InboxesGroup extends HttpApiGroup.make("inboxes")
       payload: D.CreateInboxPayload,
       success: D.Inbox,
       error: [QuotaExceeded, Conflict, InvalidRequest, NotFound, Forbidden]
-    }).annotateMerge(doc("Create an inbox", "Claims a new address such as `scout@agmx.io` for an agent.")),
+    }).annotateMerge(doc("Create an inbox", "Claims a new address such as `scout@bot.agmx.io` for an agent.")),
     HttpApiEndpoint.get("get", "/inboxes/:inboxId", {
       params: IdParam("inboxId"),
       success: D.Inbox,

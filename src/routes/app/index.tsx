@@ -274,7 +274,7 @@ function QuickConnect() {
 
 function GettingStarted({ onCreate }: { onCreate: () => void }) {
   const steps = [
-    { title: "Create your first agent", body: "Give it a name and an address like scout@agmx.io.", done: false, action: <Button size="sm" onClick={onCreate}><Plus /> Create agent</Button> },
+    { title: "Create your first agent", body: "Give it a name and an address like scout@bot.agmx.io.", done: false, action: <Button size="sm" onClick={onCreate}><Plus /> Create agent</Button> },
     { title: "Connect it", body: "Use the API key with MCP, the REST API or the CLI.", done: false },
     { title: "Receive a verification email", body: "Codes and magic links are extracted automatically.", done: false }
   ]

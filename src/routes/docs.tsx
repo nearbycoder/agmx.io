@@ -163,7 +163,7 @@ function DocsPage() {
                 <strong>Agent</strong> — an identity for one of your AI agents. It owns inboxes, can have its own scoped API key and an optional webhook URL.
               </li>
               <li>
-                <strong>Inbox</strong> — a real address such as <code>scout@agmx.io</code>, or one on your own domain.
+                <strong>Inbox</strong> — a real address such as <code>scout@bot.agmx.io</code>, or one on your own domain.
               </li>
               <li>
                 <strong>Message</strong> — an inbound or outbound email, with <code>extracted.codes</code> and <code>extracted.links</code> for inbound mail.
@@ -237,7 +237,7 @@ function DocsPage() {
   "status": "approved",          // pending | approved | completed | denied | expired
   "apiKey": "agmx_agt_…",        // returned exactly once
   "agent": { "id": "agt_…", "name": "Scout", "inboxes": [ … ] },
-  "inbox": { "id": "inb_…", "address": "scout@agmx.io" },
+  "inbox": { "id": "inb_…", "address": "scout@bot.agmx.io" },
   "mcpUrl": "${origin}/mcp",
   "apiBaseUrl": "${api}"
 }`}
@@ -327,7 +327,7 @@ function DocsPage() {
   -H "Authorization: Bearer $AGMX_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "from": "scout@agmx.io",
+    "from": "scout@bot.agmx.io",
     "to": ["Alice Chen <alice@example.com>"],
     "subject": "Vendor shortlist",
     "text": "Hi Alice — the shortlist is attached.",
@@ -450,7 +450,7 @@ const message = await res.json() // full Message, status "sent"`
           <CodeBlock
             lang="ts"
             code={`const since = new Date().toISOString()
-await submitSignupForm({ email: "scout@agmx.io" })
+await submitSignupForm({ email: "scout@bot.agmx.io" })
 
 const res = await fetch(\`${api}/messages/wait?timeout=60&from=github.com&since=\${since}\`, {
   headers: { Authorization: \`Bearer \${process.env.AGMX_API_KEY}\` }
@@ -487,7 +487,7 @@ const code = message.extracted.codes[0]`}
           <CodeBlock lang="json" code={`{ "isRead": true, "isStarred": false, "isArchived": true, "isSpam": false, "labels": ["receipts"] }`} />
           <h3>Plus-addressing</h3>
           <p>
-            Mail sent to <code>scout+github@agmx.io</code> is delivered to <code>scout@agmx.io</code> with the label <code>github</code>. Give each service a different tag and
+            Mail sent to <code>scout+github@bot.agmx.io</code> is delivered to <code>scout@bot.agmx.io</code> with the label <code>github</code>. Give each service a different tag and
             filter on <code>labels</code> later.
           </p>
           <p>
@@ -521,7 +521,7 @@ const code = message.extracted.codes[0]`}
   "createdAt": "2026-11-02T12:00:00.000Z",
   "agentId": "agt_01j9…",
   "data": {
-    "inbox": { "id": "inb_01j9…", "address": "scout@agmx.io" },
+    "inbox": { "id": "inb_01j9…", "address": "scout@bot.agmx.io" },
     "message": { "id": "msg_01j9…", "subject": "…", "from": { … }, "extracted": { … }, … }
   }
 }`}

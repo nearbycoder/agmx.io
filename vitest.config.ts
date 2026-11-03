@@ -13,6 +13,7 @@ export default defineConfig({
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgres://postgres@localhost:54329/agmx_test",
       MAIL_TRANSPORT: "log",
       MAIL_DOMAIN: "agmx.test",
+      OPERATOR_DOMAIN: "ops.test",
       APP_URL: "http://agmx.test",
       ALLOWED_EMAILS: "owner@example.com",
       BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-123"

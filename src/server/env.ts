@@ -15,6 +15,8 @@ const list = (key: string): Array<string> =>
 
 const appUrl = (read("APP_URL") ?? read("BETTER_AUTH_URL") ?? (read("RAILWAY_PUBLIC_DOMAIN") ? `https://${read("RAILWAY_PUBLIC_DOMAIN")}` : "http://localhost:3100")).replace(/\/$/, "")
 const mailDomain = (read("MAIL_DOMAIN") ?? "agmx.io").toLowerCase()
+/** Optional brand domain (e.g. agmx.io) where only operators may create inboxes such as admin@ or support@. */
+const operatorDomain = read("OPERATOR_DOMAIN")?.toLowerCase() ?? null
 const hasAwsCredentials = Boolean(read("AWS_ACCESS_KEY_ID") && read("AWS_SECRET_ACCESS_KEY"))
 
 export const env = {
@@ -24,6 +26,7 @@ export const env = {
   databaseUrl: read("DATABASE_URL") ?? "postgres://postgres@localhost:54329/agmx",
   authSecret: read("BETTER_AUTH_SECRET") ?? "dev-secret-change-me-dev-secret-change-me",
   mailDomain,
+  operatorDomain: operatorDomain === mailDomain ? null : operatorDomain,
   /** Emails (or `*@domain.com` patterns) allowed to sign in. Empty = open sign-ups. */
   allowedEmails: list("ALLOWED_EMAILS"),
   /** Emails that become operators: admin role + unlimited plan. */

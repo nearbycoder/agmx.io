@@ -32,6 +32,7 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
 
   const mailDomain = me?.mailDomain ?? "agmx.io"
   const verifiedDomains = domains?.filter((d) => d.status === "verified") ?? []
+  const domainOptions = [...(me?.operatorDomain ? [me.operatorDomain] : []), ...verifiedDomains.map((d) => d.name)]
   const selectedDomain = domain || mailDomain
   const problem = usernameProblem(username, selectedDomain === mailDomain)
   const suggested = normalizeUsername(name).replace(/[^a-z0-9._-]/g, "").slice(0, 32)
@@ -159,16 +160,16 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
                   placeholder={suggested || "scout"}
                   value={username}
                   onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                  suffix={verifiedDomains.length ? undefined : `@${mailDomain}`}
+                  suffix={domainOptions.length ? undefined : `@${mailDomain}`}
                   autoComplete="off"
                   spellCheck={false}
                 />
-                {verifiedDomains.length ? (
+                {domainOptions.length ? (
                   <NativeSelect value={domain} onChange={setDomain} className="w-44 font-mono text-[13px]" aria-label="Domain">
                     <option value="">@{mailDomain}</option>
-                    {verifiedDomains.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        @{d.name}
+                    {domainOptions.map((name) => (
+                      <option key={name} value={name}>
+                        @{name}
                       </option>
                     ))}
                   </NativeSelect>

@@ -55,6 +55,8 @@ export const Me = Schema.Struct({
   plan: PlanLimits,
   usage: UsageSummary,
   mailDomain: Schema.String,
+  /** Brand domain where only operators can create inboxes (e.g. admin@agmx.io). Null for non-operators. */
+  operatorDomain: Schema.NullOr(Schema.String),
   sendingEnabled: Schema.Boolean,
   /** True when development helpers (e.g. simulated inbound mail) are enabled on this server. */
   devTools: Schema.Boolean
@@ -371,7 +373,7 @@ export const WebhookDelivery = Schema.Struct({
 export const StartSignupPayload = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
   description: Schema.optional(Schema.String.check(Schema.isMaxLength(500))),
-  /** Preferred inbox username, e.g. `"scout"` → scout@agmx.io. */
+  /** Preferred inbox username, e.g. `"scout"` → scout@bot.agmx.io. */
   username: Schema.optional(Schema.String),
   /** Email of the human who should approve this agent. Helps them find the request. */
   ownerEmail: Schema.optional(Schema.String)

@@ -179,7 +179,7 @@ function AsidePanel() {
     { t: "02:14:07", text: "POST /api/v1/signup", tone: "muted" },
     { t: "02:14:08", text: "→ approval requested · code KQ7M-3XPA", tone: "muted" },
     { t: "02:14:31", text: "✓ approved by human", tone: "accent" },
-    { t: "02:14:32", text: "inbox ready · scout@agmx.io", tone: "ink" },
+    { t: "02:14:32", text: "inbox ready · scout@bot.agmx.io", tone: "ink" },
     { t: "02:15:02", text: "GET /messages/wait …", tone: "muted" },
     { t: "02:15:09", text: "✉ noreply@github.com — code 482913", tone: "accent" }
   ]

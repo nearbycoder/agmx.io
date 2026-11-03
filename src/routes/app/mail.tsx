@@ -247,7 +247,7 @@ function MailPage() {
         <EmptyState
           icon={<Bot />}
           title="No inboxes yet"
-          description="Create an agent and give it an address like scout@agmx.io. Its mail will show up here in real time."
+          description="Create an agent and give it an address like scout@bot.agmx.io. Its mail will show up here in real time."
           action={
             <Link to="/app/agents" search={{ new: true }}>
               <Button>

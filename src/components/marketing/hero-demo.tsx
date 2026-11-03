@@ -87,7 +87,7 @@ export function HeroDemo() {
             waiting for your human to approve…
           </Line>
           <Line show={step >= 3}>
-            <span className="text-accent">✓ approved</span> · <span className="text-white">scout@agmx.io</span> · <span className="text-white/50">agmx_agt_••••3fQ</span>
+            <span className="text-accent">✓ approved</span> · <span className="text-white">scout@bot.agmx.io</span> · <span className="text-white/50">agmx_agt_••••3fQ</span>
           </Line>
           <div className={cn("mt-3", step < 4 && "invisible")}>
             <span className="text-accent">$</span>{" "}
@@ -124,7 +124,7 @@ export function HeroDemo() {
       >
         <div className="flex items-center justify-between px-3 pt-2 pb-2.5">
           <div className="flex items-center gap-2 text-[12px] font-medium">
-            <Inbox className="size-3.5 text-muted" /> scout@agmx.io
+            <Inbox className="size-3.5 text-muted" /> scout@bot.agmx.io
           </div>
           <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-semibold tabular-nums transition", arrived ? "bg-accent text-accent-fg" : "bg-bg-subtle text-muted")}>
             {arrived ? "1 new" : "0 new"}

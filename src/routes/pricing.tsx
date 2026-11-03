@@ -35,7 +35,7 @@ const GROUPS: Array<{ title: string; rows: Array<Row> }> = [
   {
     title: "Addresses",
     rows: [
-      { label: `Shared domain (you@agmx.io)`, value: () => true },
+      { label: `Shared domain (you@bot.agmx.io)`, value: () => true },
       { label: "Plus-addressing labels", value: () => true },
       { label: "Custom domains with DKIM", value: (p) => (p.customDomains === 0 ? false : formatLimit(p.customDomains)) }
     ]

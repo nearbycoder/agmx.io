@@ -185,3 +185,27 @@ describe("webhooks", () => {
     expect(delivery.body).toMatchObject({ event: "webhook.test", status: "failed", attempts: 1 })
   })
 })
+
+describe("operator domain", () => {
+  it("only lets operators claim addresses on the brand domain, including reserved names", async () => {
+    const agents = await call("GET", "/agents")
+    const agentId = agents.body[0].id
+    const denied = await call("POST", "/inboxes", { agentId, username: "admin", domain: "ops.test" })
+    expect(denied.body).toMatchObject({ _tag: "InvalidRequest", field: "domain" })
+    expect((await call("GET", "/me")).body.operatorDomain).toBeNull()
+
+    const pg = postgres(url, { max: 1 })
+    await pg`update "user" set role = 'admin' where id = ${ownerId}`
+    await pg.end()
+    expect((await call("GET", "/me")).body.operatorDomain).toBe("ops.test")
+    const created = await call("POST", "/inboxes", { agentId, username: "admin", domain: "ops.test" })
+    expect(created.body.address).toBe("admin@ops.test")
+  })
+
+  it("refuses the server's own domains as custom domains", async () => {
+    for (const name of ["ops.test", "mail.agmx.test"]) {
+      const res = await call("POST", "/domains", { name })
+      expect(res.body._tag).toBe("InvalidRequest")
+    }
+  })
+})

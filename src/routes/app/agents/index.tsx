@@ -99,7 +99,7 @@ function AgentsPage() {
             <EmptyState
               icon={<Bot />}
               title="No agents yet"
-              description="Create an agent to claim an address like scout@agmx.io — or let your agent sign itself up via the API and approve it here."
+              description="Create an agent to claim an address like scout@bot.agmx.io — or let your agent sign itself up via the API and approve it here."
               action={
                 <Button onClick={() => setOpen(true)}>
                   <Plus /> Create your first agent

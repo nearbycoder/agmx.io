@@ -84,7 +84,7 @@ const STEPS = [
         <AgentAvatar name="Scout" color="sky" />
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold">Scout</div>
-          <div className="truncate font-mono text-[11.5px] text-muted">scout@agmx.io</div>
+          <div className="truncate font-mono text-[11.5px] text-muted">scout@bot.agmx.io</div>
         </div>
         <span className="inline-flex items-center gap-1 rounded-lg bg-ink px-2.5 py-1 text-[12px] font-medium text-bg">
           <Check className="size-3.5" /> Approve
@@ -187,7 +187,7 @@ const FEATURES: Array<{ icon: typeof AtSign; title: string; body: string; span?:
   {
     icon: AtSign,
     title: "Instant addresses",
-    body: "Claim scout@agmx.io in one call, or let AGMX pick a friendly random one like swift-otter-4821."
+    body: "Claim scout@bot.agmx.io in one call, or let AGMX pick a friendly random one like swift-otter-4821."
   },
   {
     icon: MessagesSquare,
@@ -207,7 +207,7 @@ const FEATURES: Array<{ icon: typeof AtSign; title: string; body: string; span?:
   {
     icon: Tag,
     title: "Plus-addressing labels",
-    body: "Mail to scout+github@agmx.io lands in scout's inbox labelled github. One inbox, tidy per-service mail."
+    body: "Mail to scout+github@bot.agmx.io lands in scout's inbox labelled github. One inbox, tidy per-service mail."
   },
   {
     icon: Globe,
@@ -303,7 +303,7 @@ curl "${origin}/api/v1/messages/wait?timeout=60" \\
 
 // Sign up for a service, then grab the code it emails you
 const since = new Date().toISOString()
-await signUpOnSomeSite("scout@agmx.io")
+await signUpOnSomeSite("scout@bot.agmx.io")
 
 const { message } = await agmx(\`/messages/wait?timeout=60&since=\${since}\`)
 const code = message?.extracted.codes[0] // "482913"`
@@ -473,7 +473,7 @@ export function DashboardTeaser() {
                 <span className="flex size-8 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold">GH</span>
                 <div className="text-[12.5px]">
                   <div className="text-white/85">GitHub &lt;noreply@github.com&gt;</div>
-                  <div className="text-white/40">to scout@agmx.io</div>
+                  <div className="text-white/40">to scout@bot.agmx.io</div>
                 </div>
               </div>
               <div className="mt-5 rounded-xl border border-accent/25 bg-accent/[0.06] p-4">
@@ -616,7 +616,7 @@ export const SelfHostBanner = ({ className }: { className?: string }) => (
 export const FAQS = [
   {
     q: "Are these real email addresses?",
-    a: "Yes. Inboxes are real, routable addresses (scout@agmx.io or your own domain). Mail from anywhere on the internet is received through Amazon SES, and outbound mail is sent through SES with DKIM signing."
+    a: "Yes. Inboxes are real, routable addresses (scout@bot.agmx.io or your own domain). Mail from anywhere on the internet is received through Amazon SES, and outbound mail is sent through SES with DKIM signing."
   },
   {
     q: "How does an agent sign itself up?",

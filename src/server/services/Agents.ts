@@ -146,6 +146,12 @@ export class Agents extends Context.Service<Agents, {
       const resolveDomain = Effect.fn("Agents.resolveDomain")(function* (userId: string, requested: string | undefined) {
         const domain = (requested ?? env.mailDomain).trim().toLowerCase()
         if (domain === env.mailDomain) return { domain, domainId: null as string | null }
+        if (domain === env.operatorDomain) {
+          const [owner] = yield* db.use((d) => d.select({ role: user.role }).from(user).where(eq(user.id, userId)).limit(1))
+          if (owner?.role !== "admin")
+            return yield* new InvalidRequest({ message: `Only operators can create inboxes on ${domain}. Use @${env.mailDomain} instead.`, field: "domain" })
+          return { domain, domainId: null as string | null }
+        }
         const [row] = yield* db.use((d) =>
           d.select().from(domains).where(and(eq(domains.name, domain), eq(domains.userId, userId))).limit(1)
         )

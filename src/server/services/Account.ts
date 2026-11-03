@@ -110,6 +110,7 @@ export class Account extends Context.Service<Account, {
               messagesStored: counts?.messagesStored ?? 0
             },
             mailDomain: env.mailDomain,
+            operatorDomain: row?.role === "admin" && principal.kind !== "agent_key" ? env.operatorDomain : null,
             sendingEnabled: transport.name === "ses",
             devTools: env.devInbound
           }

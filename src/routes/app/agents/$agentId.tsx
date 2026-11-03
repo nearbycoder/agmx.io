@@ -388,6 +388,7 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
   const [displayName, setDisplayName] = useState("")
   const mailDomain = me?.mailDomain ?? "agmx.io"
   const verified = domains?.filter((d) => d.status === "verified") ?? []
+  const domainOptions = [...(me?.operatorDomain ? [me.operatorDomain] : []), ...verified.map((d) => d.name)]
   const problem = usernameProblem(username, (domain || mailDomain) === mailDomain)
   useEffect(() => {
     if (!open) {
@@ -443,18 +444,18 @@ function AddInboxDialog({ open, onOpenChange, agentId }: { open: boolean; onOpen
                 placeholder="billing-bot"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                suffix={verified.length ? undefined : `@${mailDomain}`}
+                suffix={domainOptions.length ? undefined : `@${mailDomain}`}
                 spellCheck={false}
                 autoComplete="off"
               />
-              {verified.length ? (
+              {domainOptions.length ? (
                 <NativeSelect value={domain} onChange={setDomain} className="w-44 font-mono text-[13px]" aria-label="Domain">
                   <option value="">@{mailDomain}</option>
-                  {verified.map((d) => (
-                    <option key={d.id} value={d.name}>
-                      @{d.name}
-                    </option>
-                  ))}
+                  {domainOptions.map((name) => (
+                      <option key={name} value={name}>
+                        @{name}
+                      </option>
+                    ))}
                 </NativeSelect>
               ) : null}
             </div>
