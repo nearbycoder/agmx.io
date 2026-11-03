@@ -1,0 +1,115 @@
+# Self-host AGMX locally: Postgres + S3-compatible storage (RustFS) + the app.
+#
+#   ADMIN_EMAILS=you@example.com docker compose up --build
+#   open http://localhost:3000
+#
+# Mail is printed to the app logs (MAIL_TRANSPORT=log), so the sign-in link shows up in
+# `docker compose logs -f app`. See README → "Self-hosting with Docker Compose" for switching
+# to Amazon SES. Ports are bound to 127.0.0.1; change them deliberately before exposing anything.
+
+name: agmx
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agmx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agmx}
+      POSTGRES_DB: agmx
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agmx -d agmx"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # S3-compatible attachment storage. MinIO no longer publishes community images,
+  # so this uses RustFS (Apache-2.0). Any S3-compatible server works.
+  s3:
+    image: rustfs/rustfs:1.0.3
+    restart: unless-stopped
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-agmx-local}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-agmx-local-secret}
+    ports:
+      # Signed download URLs point the browser here, so it must be reachable from your machine.
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - s3-data:/data
+
+  # One-shot job: create the attachments bucket, then exit.
+  s3-init:
+    image: amazon/aws-cli:2.37.13
+    depends_on:
+      - s3
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-agmx-local}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-agmx-local-secret}
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 30); do
+          aws --endpoint-url http://s3:9000 s3api head-bucket --bucket agmx-attachments 2>/dev/null && exit 0
+          aws --endpoint-url http://s3:9000 s3api create-bucket --bucket agmx-attachments && exit 0
+          sleep 2
+        done
+        echo "Could not create the agmx-attachments bucket" >&2
+        exit 1
+    restart: "no"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      PORT: 3000
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      DATABASE_URL: postgres://agmx:${POSTGRES_PASSWORD:-agmx}@postgres:5432/agmx
+      # Generate a real one for anything beyond a laptop:  openssl rand -base64 48
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-to-a-long-random-string-change-me}
+
+      # Access: operators (admin role, Unlimited plan) and who may sign in.
+      # ALLOWED_EMAILS defaults to the admins only; set it to "" (or "*") to open sign-ups.
+      ADMIN_EMAILS: ${ADMIN_EMAILS:?Set ADMIN_EMAILS to your email, e.g. ADMIN_EMAILS=you@example.com docker compose up}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS-${ADMIN_EMAILS}}
+      DEFAULT_PLAN: ${DEFAULT_PLAN:-free}
+
+      # Mail. "log" prints every outgoing email (including sign-in links) to these logs.
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-log}
+      MAIL_DOMAIN: ${MAIL_DOMAIN:-agmx.localhost}
+      # Lets you inject test inbound mail with POST /api/dev/inbound. Unauthenticated:
+      # set to false before exposing this instance to a network.
+      ENABLE_DEV_INBOUND: ${ENABLE_DEV_INBOUND:-true}
+
+      # Amazon SES (leave empty for local-only mail). See README.
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      SES_CONFIGURATION_SET: ${SES_CONFIGURATION_SET:-}
+      SYSTEM_FROM: ${SYSTEM_FROM:-}
+
+      # Attachments in the local S3 bucket above.
+      ATTACHMENT_STORAGE: s3
+      STORAGE_BUCKET: agmx-attachments
+      STORAGE_REGION: us-east-1
+      STORAGE_ENDPOINT: http://s3:9000
+      # The browser downloads attachments via signed URLs, which must use a host it can reach.
+      STORAGE_PUBLIC_ENDPOINT: http://localhost:9000
+      STORAGE_FORCE_PATH_STYLE: "true"
+      STORAGE_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-agmx-local}
+      STORAGE_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-agmx-local-secret}
+
+volumes:
+  postgres-data:
+  s3-data:

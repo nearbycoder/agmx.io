@@ -10,6 +10,11 @@ import { Mail } from "../services/Mail"
 import { Signups } from "../services/Signups"
 import { Storage } from "../services/Storage"
 import { Webhooks } from "../services/Webhooks"
+import { Reputation, REPUTATION } from "../services/Reputation"
+import { Db } from "../services/Db"
+import { requireAccount } from "../services/access"
+import { agents as agentsTable } from "../db/schema"
+import { eq } from "drizzle-orm"
 
 const ok = { ok: true } as const
 
@@ -28,6 +33,32 @@ const AccountHandlers = HttpApiBuilder.group(
     return handlers
       .handle("me", () => Effect.flatMap(Effect.service(CurrentPrincipal), account.me))
       .handle("usage", ({ query }) => Effect.flatMap(Effect.service(CurrentPrincipal), (p) => account.usage(p, query.days ?? 30)))
+      .handle("exportData", () =>
+        Effect.gen(function* () {
+          const data = yield* account.exportData(yield* Effect.service(CurrentPrincipal))
+          return HttpServerResponse.text(JSON.stringify(data, null, 2), {
+            contentType: "application/json",
+            headers: {
+              "content-disposition": `attachment; filename="agmx-export-${data.exportedAt.slice(0, 10)}.json"`,
+              "cache-control": "no-store"
+            }
+          })
+        })
+      )
+      .handle("deleteAccount", ({ payload }) =>
+        Effect.gen(function* () {
+          yield* account.deleteAccount(yield* Effect.service(CurrentPrincipal), payload.confirm)
+          // Expire the session cookies too: the signed session cache would otherwise outlive the account for a few minutes.
+          return ["agmx.session_token", "agmx.session_data", "agmx.dont_remember"].reduce(
+            (res, name) =>
+              res.pipe(
+                HttpServerResponse.expireCookieUnsafe(name, { path: "/", httpOnly: true, sameSite: "lax" }),
+                HttpServerResponse.expireCookieUnsafe(`__Secure-${name}`, { path: "/", httpOnly: true, secure: true, sameSite: "lax" })
+              ),
+            HttpServerResponse.jsonUnsafe(ok, { headers: { "cache-control": "no-store" } })
+          )
+        })
+      )
   })
 )
 
@@ -37,7 +68,22 @@ const AgentsHandlers = HttpApiBuilder.group(
   Effect.fn(function* (handlers) {
     const agents = yield* Agents
     const webhooks = yield* Webhooks
+    const reputation = yield* Reputation
+    const db = yield* Db
     const withPrincipal = Effect.service(CurrentPrincipal)
+    const reputationView = (agentId: string) =>
+      Effect.gen(function* () {
+        const s = yield* reputation.stats(agentId)
+        const [row] = yield* db.use((d) =>
+          d.select({ at: agentsTable.sendingPausedAt, reason: agentsTable.sendingPausedReason }).from(agentsTable).where(eq(agentsTable.id, agentId))
+        )
+        return {
+          ...s,
+          since: s.since.toISOString(),
+          sendingPaused: row?.at ? { at: row.at.toISOString(), reason: row.reason } : null,
+          thresholds: REPUTATION
+        }
+      })
     return handlers
       .handle("list", () => Effect.flatMap(withPrincipal, agents.list))
       .handle("create", ({ payload }) => Effect.flatMap(withPrincipal, (p) => agents.create(p, payload)))
@@ -47,6 +93,31 @@ const AgentsHandlers = HttpApiBuilder.group(
       .handle("rotateWebhookSecret", ({ params }) => Effect.flatMap(withPrincipal, (p) => agents.rotateWebhookSecret(p, params.agentId)))
       .handle("testWebhook", ({ params }) => Effect.flatMap(withPrincipal, (p) => webhooks.test(p, params.agentId)))
       .handle("webhookDeliveries", ({ params }) => Effect.flatMap(withPrincipal, (p) => webhooks.list(p, params.agentId)))
+      .handle("reputation", ({ params }) =>
+        Effect.gen(function* () {
+          yield* agents.get(yield* withPrincipal, params.agentId)
+          return yield* reputationView(params.agentId)
+        })
+      )
+      .handle("pauseSending", ({ params, payload }) =>
+        Effect.gen(function* () {
+          const principal = yield* withPrincipal
+          yield* agents.get(principal, params.agentId)
+          const who = principal.kind === "agent_key" ? "the agent itself" : principal.email || "a human"
+          yield* reputation.pause(params.agentId, payload.reason?.trim() || `Paused by ${who}.`, "human")
+          return yield* reputationView(params.agentId)
+        })
+      )
+      .handle("resumeSending", ({ params }) =>
+        Effect.gen(function* () {
+          const principal = yield* withPrincipal
+          yield* agents.get(principal, params.agentId)
+          // An agent must never be able to lift its own pause.
+          yield* requireAccount(principal, "resume sending")
+          yield* reputation.resume(params.agentId)
+          return yield* reputationView(params.agentId)
+        })
+      )
   })
 )
 

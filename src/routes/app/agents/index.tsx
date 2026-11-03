@@ -150,6 +150,12 @@ function AgentCard({ agent }: { agent: AgentT }) {
           <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
             <span className={cn("size-1.5 rounded-full", paused ? "bg-warn" : "bg-ok")} />
             {paused ? "Paused" : "Active"}
+            {agent.sendingPaused && !paused ? (
+              <>
+                <span className="text-faint">·</span>
+                <span className="font-medium text-danger">Sending paused</span>
+              </>
+            ) : null}
             <span className="text-faint">·</span>
             {last ? `Last mail ${relativeTime(last)}` : "No mail yet"}
           </div>

@@ -29,14 +29,21 @@ export class Storage extends Context.Service<Storage, {
   static readonly layerS3 = Layer.sync(Storage)(() => {
     const bucket = env.storage.bucket
     if (!bucket) throw new Error("ATTACHMENT_STORAGE=s3 requires STORAGE_BUCKET")
-    const client = new S3Client({
-      region: env.storage.endpoint ? "auto" : env.storage.region,
-      endpoint: env.storage.endpoint,
-      credentials:
-        env.storage.accessKeyId && env.storage.secretAccessKey
-          ? { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey }
-          : undefined
-    })
+    const makeClient = (endpoint: string | undefined) =>
+      new S3Client({
+        region: env.storage.endpoint ? (env.storage.forcePathStyle ? env.storage.region : "auto") : env.storage.region,
+        endpoint,
+        // MinIO/RustFS and other self-hosted servers usually need bucket-in-path URLs.
+        forcePathStyle: env.storage.forcePathStyle,
+        credentials:
+          env.storage.accessKeyId && env.storage.secretAccessKey
+            ? { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey }
+            : undefined
+      })
+    const client = makeClient(env.storage.endpoint)
+    // Signed URLs are opened by the browser, which may reach storage at a different address
+    // than the app does (e.g. http://localhost:9000 vs http://s3:9000 inside Docker).
+    const signer = env.storage.publicEndpoint ? makeClient(env.storage.publicEndpoint) : client
     const attempt = <A>(label: string, f: () => Promise<A>) =>
       Effect.tryPromise({ try: f, catch: (cause) => cause }).pipe(
         Effect.retry({ times: 2 }),
@@ -68,7 +75,7 @@ export class Storage extends Context.Service<Storage, {
       signedUrl: (key, { filename, contentType, inline }) =>
         attempt("sign", () =>
           getSignedUrl(
-            client,
+            signer,
             new GetObjectCommand({
               Bucket: bucket,
               Key: key,

@@ -24,10 +24,17 @@ export const Route = createFileRoute("/mcp")({
           import("~/server/mcp"),
           import("effect")
         ])
+        const limits = await import("~/server/rate-limit")
+        const blocked = limits.badAuthLockout(request, corsHeaders) ?? limits.checkRequest(request, { headers: corsHeaders })
+        if (blocked) return blocked
         const header = request.headers.get("authorization") ?? ""
         const key = header.replace(/^Bearer\s+/i, "").trim() || request.headers.get("x-api-key")?.trim() || new URL(request.url).searchParams.get("key") || ""
         const principal = key ? await runtime.runPromise(Effect.flatMap(Effect.service(Agents), (a) => a.authenticate(key))) : null
         if (!principal) {
+          if (key) {
+            const locked = limits.recordBadAuth(request, corsHeaders)
+            if (locked) return locked
+          }
           return Response.json(
             { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized: send Authorization: Bearer agmx_… (create a key in the dashboard or via POST /api/v1/signup)." } },
             { status: 401, headers: { ...corsHeaders, "www-authenticate": 'Bearer realm="agmx"' } }

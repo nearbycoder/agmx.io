@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm"
 import { db } from "./db/client"
 import * as schema from "./db/schema"
 import { env, isAdminEmail, isEmailAllowed } from "./env"
+import { IP_HEADERS, rateLimitingEnabled } from "./rate-limit"
 import { buttonEmail } from "./system-mail"
 
 const NOT_ALLOWED = "AGMX is invite-only right now. This email isn't on the access list."
@@ -30,7 +31,21 @@ export const auth = betterAuth({
     schema: { user: schema.user, session: schema.session, account: schema.account, verification: schema.verification }
   }),
   trustedOrigins: [env.appUrl],
-  advanced: { cookiePrefix: "agmx" },
+  advanced: { cookiePrefix: "agmx", ipAddress: { ipAddressHeaders: IP_HEADERS } },
+  // Better Auth's own limiter (in memory). Sign-in and sign-up endpoints get tight budgets because
+  // each magic link or reset sends an email from our domain.
+  rateLimit: {
+    enabled: env.isProduction && rateLimitingEnabled(),
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/magic-link": { window: 600, max: 5 },
+      "/sign-in/email": { window: 300, max: 10 },
+      "/sign-up/email": { window: 3600, max: 5 },
+      "/request-password-reset": { window: 600, max: 3 },
+      "/magic-link/verify": { window: 60, max: 20 }
+    }
+  },
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,

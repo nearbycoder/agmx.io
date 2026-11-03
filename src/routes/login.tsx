@@ -156,7 +156,17 @@ function LoginPage() {
                 </form>
               )}
 
-              <p className="mt-8 text-[12.5px] text-muted">AGMX is invite-only during early access.</p>
+              <p className="mt-8 text-[12.5px] leading-relaxed text-muted">
+                By continuing you agree to the{" "}
+                <Link to="/terms" className="text-ink-2 underline decoration-line-strong underline-offset-2 hover:text-ink">
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link to="/privacy" className="text-ink-2 underline decoration-line-strong underline-offset-2 hover:text-ink">
+                  Privacy Policy
+                </Link>
+                . AGMX is invite-only during early access.
+              </p>
             </div>
           )}
         </div>

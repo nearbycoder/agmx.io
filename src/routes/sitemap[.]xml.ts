@@ -6,7 +6,9 @@ const PAGES = [
   { path: "/docs", priority: "0.9", changefreq: "weekly" },
   { path: "/skill.md", priority: "0.6", changefreq: "weekly" },
   { path: "/llms.txt", priority: "0.4", changefreq: "monthly" },
-  { path: "/api/v1/reference", priority: "0.5", changefreq: "weekly" }
+  { path: "/api/v1/reference", priority: "0.5", changefreq: "weekly" },
+  { path: "/terms", priority: "0.3", changefreq: "yearly" },
+  { path: "/privacy", priority: "0.3", changefreq: "yearly" }
 ]
 
 export const Route = createFileRoute("/sitemap.xml")({

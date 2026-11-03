@@ -67,6 +67,12 @@ export interface Security {
   score: number
   reasons: Array<string>
   hiddenContent: boolean
+  /**
+   * Whether the From address is authentic: `verified` (DMARC pass, or sent from another AGMX inbox),
+   * `failed` (DMARC fail, or both SPF and DKIM fail: likely forged) or `unknown` (no policy / no verdicts).
+   * Missing on messages stored before sender checks existed.
+   */
+  sender?: "verified" | "failed" | "unknown"
 }
 
 export interface Verdicts {
@@ -166,6 +172,11 @@ export const agents = pgTable(
     sendPolicy: text("send_policy").$type<"auto" | "first_contact" | "all">().notNull().default("auto"),
     /** Hold any agent-sent message with attachments for approval. */
     approveAttachments: boolean("approve_attachments").notNull().default(false),
+    /** Set when sending is paused (automatically for high bounce/complaint rates, or by a human). Receiving continues. */
+    sendingPausedAt: timestamp("sending_paused_at", { withTimezone: true }),
+    sendingPausedReason: text("sending_paused_reason"),
+    /** Reputation is measured from here, so a resumed agent starts with a clean window. */
+    reputationSince: timestamp("reputation_since", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt()
   },

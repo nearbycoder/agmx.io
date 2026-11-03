@@ -1,11 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { ArrowUpRight, LogOut, Monitor, Moon, Sun } from "lucide-react"
-import type { ReactNode } from "react"
+import { ArrowUpRight, Download, LogOut, Monitor, Moon, Sun, Trash2 } from "lucide-react"
+import { useState, type ReactNode } from "react"
+import { toast } from "sonner"
 import { Page, PageHeader } from "~/components/app/page"
 import { CopyField, KV, origin } from "~/components/dashboard/common"
 import { Panel, Section } from "~/components/dashboard/section"
 import { Button } from "~/components/ui/button"
+import { Dialog, DialogContent } from "~/components/ui/dialog"
+import { Field, Input } from "~/components/ui/input"
 import { Meter, Skeleton } from "~/components/ui/misc"
+import { api, errorMessage } from "~/lib/api"
 import { authClient } from "~/lib/auth-client"
 import { useAgents, useMe } from "~/lib/queries"
 import { useTheme } from "~/lib/theme"
@@ -149,8 +153,125 @@ function SettingsPage() {
             </Button>
           </Panel>
         </Section>
+
+        <YourData email={me?.user.email ?? null} isOperator={me?.user.role === "admin"} />
       </div>
     </Page>
+  )
+}
+
+function YourData({ email, isOperator }: { email: string | null; isOperator: boolean }) {
+  const [exporting, setExporting] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  const download = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch("/api/v1/account/export", { credentials: "same-origin" })
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? "Export failed")
+      const name = res.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "agmx-export.json"
+      const url = URL.createObjectURL(await res.blob())
+      const a = Object.assign(document.createElement("a"), { href: url, download: name })
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      toast.error(errorMessage(error))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  return (
+    <Section title="Your data" description="Take your data with you, or remove it from this server.">
+      <Panel divided>
+        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <div className="min-w-0">
+            <div className="text-[13.5px] font-medium">Export data</div>
+            <p className="mt-0.5 text-[13px] text-muted">
+              One JSON file with your agents, inboxes, rules, domains, key names and every message. Attachment files and secrets aren't included.
+            </p>
+          </div>
+          <Button variant="secondary" className="shrink-0" loading={exporting} onClick={download}>
+            <Download /> Export
+          </Button>
+        </div>
+        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <div className="min-w-0">
+            <div className="text-[13.5px] font-medium text-danger">Delete account</div>
+            <p className="mt-0.5 text-[13px] text-muted">
+              Permanently deletes your account, agents, inboxes, mail, attachments, API keys and custom domains. This can't be undone.
+            </p>
+          </div>
+          <Button variant="danger" className="shrink-0" disabled={!email} onClick={() => setDeleteOpen(true)}>
+            <Trash2 /> Delete account
+          </Button>
+        </div>
+      </Panel>
+      {email ? <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} email={email} isOperator={isOperator} /> : null}
+    </Section>
+  )
+}
+
+function DeleteAccountDialog({ open, onOpenChange, email, isOperator }: { open: boolean; onOpenChange: (open: boolean) => void; email: string; isOperator: boolean }) {
+  const [confirm, setConfirm] = useState("")
+  const [deleting, setDeleting] = useState(false)
+  const matches = confirm.trim().toLowerCase() === email.toLowerCase()
+
+  const submit = async () => {
+    if (!matches) return
+    setDeleting(true)
+    try {
+      await api((c) => c.account.deleteAccount({ payload: { confirm: confirm.trim() } }))
+      await authClient.signOut().catch(() => {})
+      window.location.href = "/"
+    } catch (error) {
+      toast.error(errorMessage(error))
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (deleting) return
+        if (!next) setConfirm("")
+        onOpenChange(next)
+      }}
+    >
+      <DialogContent
+        title="Delete your account?"
+        description="Everything is removed right away. Agents using your API keys stop working, and mail sent to your inboxes will bounce."
+        footer={
+          <>
+            <Button variant="secondary" disabled={deleting} onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deleting} disabled={!matches} onClick={submit}>
+              Delete account
+            </Button>
+          </>
+        }
+      >
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void submit()
+          }}
+        >
+          {isOperator ? (
+            <p className="rounded-lg border border-warn/30 bg-warn-soft px-3 py-2.5 text-[13px] leading-relaxed text-warn">
+              You're an operator of this server. Deleting your account also removes the abuse@, postmaster@ and privacy@ inboxes. They're recreated
+              automatically for another operator, if there is one.
+            </p>
+          ) : null}
+          <Field label={<>Type <span className="font-mono text-[12.5px]">{email}</span> to confirm</>} htmlFor="confirm-delete">
+            <Input id="confirm-delete" autoComplete="off" spellCheck={false} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={email} />
+          </Field>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 

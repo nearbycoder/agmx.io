@@ -21,8 +21,11 @@ export const Route = createFileRoute("/api/dev/inbound")({
         const contentType = request.headers.get("content-type") ?? ""
         let raw: Buffer
         let recipients: Array<string>
+        // Simulated SES verdicts; pass e.g. { "dmarc": "FAIL" } to test forged-sender handling.
+        let verdicts: Record<string, string> = { spam: "PASS", virus: "PASS", spf: "PASS", dkim: "PASS", dmarc: "PASS" }
         if (contentType.includes("json")) {
-          const body = (await request.json()) as { from?: string; to: string | Array<string>; subject?: string; text?: string; html?: string }
+          const body = (await request.json()) as { from?: string; to: string | Array<string>; subject?: string; text?: string; html?: string; verdicts?: Record<string, string> }
+          verdicts = { ...verdicts, ...body.verdicts }
           const to = parseAddressList(body.to).valid
           const from = parseAddressList(body.from ?? "Someone <someone@example.com>").valid[0] ?? { name: null, address: "someone@example.com" }
           raw = await composeMime({
@@ -48,7 +51,7 @@ export const Route = createFileRoute("/api/dev/inbound")({
             recipients = [...parsed.to, ...parsed.cc].map((a) => a.address)
           }
         }
-        const result = await runtime.runPromise(Effect.flatMap(Effect.service(Mail), (mail) => mail.ingestRaw(raw, recipients, { spam: "PASS", virus: "PASS", spf: "PASS", dkim: "PASS", dmarc: "PASS" })))
+        const result = await runtime.runPromise(Effect.flatMap(Effect.service(Mail), (mail) => mail.ingestRaw(raw, recipients, verdicts)))
         return Response.json(result, { status: result.delivered ? 200 : 404 })
       }
     }

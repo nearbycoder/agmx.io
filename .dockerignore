@@ -1,11 +1,15 @@
-node_modules
+**/node_modules
 .output
 .nitro
 .tanstack
 .git
+.github
+.railway
 .env
 .env.*
 !.env.example
 *.log
 coverage
 tests
+packages
+docker-compose.yml

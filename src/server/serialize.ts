@@ -36,6 +36,7 @@ export const toAgent = (row: AgentRow, inboxes: ReadonlyArray<typeof D.Inbox.Typ
   webhookUrl: row.webhookUrl,
   sendPolicy: row.sendPolicy,
   approveAttachments: row.approveAttachments,
+  sendingPaused: row.sendingPausedAt ? { at: iso(row.sendingPausedAt), reason: row.sendingPausedReason } : null,
   inboxes: [...inboxes],
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt)

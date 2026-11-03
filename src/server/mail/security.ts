@@ -1,5 +1,5 @@
 import { parse, type HTMLElement, NodeType } from "node-html-parser"
-import type { Security } from "../db/schema"
+import type { Extracted, Security, Verdicts } from "../db/schema"
 import { htmlToText } from "./compose"
 
 /**
@@ -156,3 +156,51 @@ export const analyzeSecurity = (subject: string, text: string | null, html: stri
   const risk: Security["risk"] = score >= 5 ? "high" : score >= 2 ? "medium" : "low"
   return { security: { risk, score, reasons: [...reasons].slice(0, 8), hiddenContent }, safeText, visibleHtml }
 }
+
+// ---------------------------------------------------------------------------
+// Sender authentication (SPF / DKIM / DMARC verdicts from SES)
+// ---------------------------------------------------------------------------
+
+export type SenderAuth = NonNullable<Security["sender"]>
+
+const isPass = (s: string | null | undefined) => typeof s === "string" && s.toUpperCase() === "PASS"
+const isFail = (s: string | null | undefined) => typeof s === "string" && s.toUpperCase() === "FAIL"
+
+/**
+ * Decide whether the From address can be trusted. DMARC is the only verdict that checks the
+ * visible From domain is aligned, so it decides; SPF+DKIM both failing is also treated as forged.
+ * `internal` = delivered from another AGMX inbox, which the platform itself authenticated.
+ */
+export const senderAuthentication = (verdicts: Verdicts, internal = false): SenderAuth => {
+  if (internal) return "verified"
+  if (isPass(verdicts.dmarc)) return "verified"
+  if (isFail(verdicts.dmarc)) return "failed"
+  if (isFail(verdicts.spf) && isFail(verdicts.dkim)) return "failed"
+  return "unknown"
+}
+
+/** Fold the sender verdict into the security report. A forged sender is at least `medium` risk. */
+export const withSenderAuth = (security: Security, sender: SenderAuth, virus = false): Security => {
+  const reasons = [...security.reasons]
+  let score = security.score
+  if (sender === "failed") {
+    reasons.unshift("sender failed authentication (SPF/DKIM/DMARC): the From address may be forged")
+    score += 3
+  }
+  if (virus) {
+    reasons.unshift("attachments flagged as malware by the mail scanner")
+    score += 5
+  }
+  const risk: Security["risk"] = score >= 5 ? "high" : score >= 2 ? "medium" : "low"
+  return { ...security, sender, score, risk, reasons: reasons.slice(0, 8) }
+}
+
+/**
+ * Codes and sign-in links are the most valuable thing to forge. When the sender failed
+ * authentication, keep them out of the structured extraction agents act on automatically.
+ */
+export const withholdSensitive = (extracted: Extracted): Extracted => ({
+  ...extracted,
+  codes: [],
+  links: extracted.links.filter((l) => l.kind === "unsubscribe" || l.kind === "other" || l.kind === "tracking")
+})

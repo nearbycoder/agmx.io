@@ -16,9 +16,11 @@ import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkillDotmdRouteImport } from './routes/skill[.]md'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiEventsRouteImport } from './routes/api/events'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
@@ -70,6 +72,11 @@ const PricingRoute = PricingRouteImport.update({
   path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
@@ -83,6 +90,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const SkillDotmdRoute = SkillDotmdRouteImport.update({
   id: '/skill.md',
   path: '/skill.md',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiEventsRoute = ApiEventsRouteImport.update({
@@ -169,9 +181,11 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skill.md': typeof SkillDotmdRoute
+  '/terms': typeof TermsRoute
   '/api/events': typeof ApiEventsRoute
   '/app/admin': typeof AppAdminRoute
   '/app/approvals': typeof AppApprovalsRoute
@@ -195,9 +209,11 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skill.md': typeof SkillDotmdRoute
+  '/terms': typeof TermsRoute
   '/api/events': typeof ApiEventsRoute
   '/app/admin': typeof AppAdminRoute
   '/app/approvals': typeof AppApprovalsRoute
@@ -223,9 +239,11 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skill.md': typeof SkillDotmdRoute
+  '/terms': typeof TermsRoute
   '/api/events': typeof ApiEventsRoute
   '/app/admin': typeof AppAdminRoute
   '/app/approvals': typeof AppApprovalsRoute
@@ -252,9 +270,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/mcp'
     | '/pricing'
+    | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/skill.md'
+    | '/terms'
     | '/api/events'
     | '/app/admin'
     | '/app/approvals'
@@ -278,9 +298,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/mcp'
     | '/pricing'
+    | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/skill.md'
+    | '/terms'
     | '/api/events'
     | '/app/admin'
     | '/app/approvals'
@@ -305,9 +327,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/mcp'
     | '/pricing'
+    | '/privacy'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/skill.md'
+    | '/terms'
     | '/api/events'
     | '/app/admin'
     | '/app/approvals'
@@ -333,9 +357,11 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
   PricingRoute: typeof PricingRoute
+  PrivacyRoute: typeof PrivacyRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkillDotmdRoute: typeof SkillDotmdRoute
+  TermsRoute: typeof TermsRoute
   ApiEventsRoute: typeof ApiEventsRoute
   ClaimCodeRoute: typeof ClaimCodeRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -395,6 +421,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/robots.txt': {
       id: '/robots.txt'
       path: '/robots.txt'
@@ -414,6 +447,13 @@ declare module '@tanstack/react-router' {
       path: '/skill.md'
       fullPath: '/skill.md'
       preLoaderRoute: typeof SkillDotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/events': {
@@ -558,9 +598,11 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
   PricingRoute: PricingRoute,
+  PrivacyRoute: PrivacyRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkillDotmdRoute: SkillDotmdRoute,
+  TermsRoute: TermsRoute,
   ApiEventsRoute: ApiEventsRoute,
   ClaimCodeRoute: ClaimCodeRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

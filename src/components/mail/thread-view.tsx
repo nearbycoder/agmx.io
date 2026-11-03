@@ -469,7 +469,7 @@ function MessageItem({
             </div>
             <div className="grid items-start gap-2 sm:grid-cols-2">
               {files.map((a) => (
-                <AttachmentTile key={a.id} attachment={a} />
+                <AttachmentTile key={a.id} attachment={a} quarantined={m.verdicts.virus?.toUpperCase() === "FAIL"} />
               ))}
             </div>
           </div>
@@ -520,8 +520,21 @@ function OutboxNote({ icon, tone, action, children }: { icon: ReactNode; tone: "
   )
 }
 
-function AttachmentTile({ attachment: a }: { attachment: MessageT["attachments"][number] }) {
+function AttachmentTile({ attachment: a, quarantined = false }: { attachment: MessageT["attachments"][number]; quarantined?: boolean }) {
   const [open, setOpen] = useState(false)
+  if (quarantined) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-danger/20 bg-danger-soft/50 p-2 pr-3" title="The mail scanner flagged this file as malware, so it was never stored.">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-danger-soft text-danger">
+          <ShieldAlert className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium text-ink-2 line-through decoration-danger/40">{a.filename}</span>
+          <span className="block text-[12px] text-danger">Quarantined: flagged as malware</span>
+        </span>
+      </div>
+    )
+  }
   return (
     <div className={cn("rounded-lg border border-line transition-colors", open ? "sm:col-span-2" : "hover:border-line-strong")}>
       <a href={a.downloadUrl} className="group flex items-center gap-3 p-2 pr-3 hover:bg-bg-subtle/40">

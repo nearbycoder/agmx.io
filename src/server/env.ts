@@ -53,6 +53,10 @@ export const env = {
     region: read("STORAGE_REGION") ?? read("AWS_REGION") ?? "us-east-1",
     /** Custom endpoint for R2/MinIO, e.g. https://<account>.r2.cloudflarestorage.com */
     endpoint: read("STORAGE_ENDPOINT"),
+    /** Address browsers use for signed download URLs when it differs from STORAGE_ENDPOINT. */
+    publicEndpoint: read("STORAGE_PUBLIC_ENDPOINT"),
+    /** Bucket-in-path addressing, needed by most self-hosted S3 servers (MinIO, RustFS). */
+    forcePathStyle: read("STORAGE_FORCE_PATH_STYLE") === "true",
     accessKeyId: read("STORAGE_ACCESS_KEY_ID") ?? read("AWS_ACCESS_KEY_ID"),
     secretAccessKey: read("STORAGE_SECRET_ACCESS_KEY") ?? read("AWS_SECRET_ACCESS_KEY")
   },
@@ -61,8 +65,26 @@ export const env = {
   systemFrom: read("SYSTEM_FROM") ?? `AGMX <no-reply@${mailDomain}>`,
   /** Allows `POST /api/dev/inbound` to inject raw MIME for testing. */
   devInbound: read("ENABLE_DEV_INBOUND") === "true" || read("NODE_ENV") !== "production",
+  /** Who gets operator alerts (errors, SES failures). Defaults to ADMIN_EMAILS. */
+  alertEmails: list("ALERT_EMAILS").length ? list("ALERT_EMAILS") : list("ADMIN_EMAILS"),
+  /** Optional Slack/Discord-compatible incoming webhook for operator alerts. */
+  alertWebhookUrl: read("ALERT_WEBHOOK_URL"),
+  /** Alerts are on in production; set ALERTS=on/off to override. */
+  alertsEnabled: read("ALERTS") ? read("ALERTS") === "on" : read("NODE_ENV") === "production",
   /** Public agent self-signup (device flow). The human still approves every request. */
-  agentSignups: read("ENABLE_AGENT_SIGNUPS") !== "false"
+  agentSignups: read("ENABLE_AGENT_SIGNUPS") !== "false",
+  /** Who runs this instance, shown in the Terms and Privacy Policy. */
+  operatorName: read("OPERATOR_NAME") ?? "AGMX",
+  /** Domain for abuse@, postmaster@ and privacy@ (RFC 2142): the operator domain, else the mail domain. */
+  contactDomain: (operatorDomain && operatorDomain !== mailDomain ? operatorDomain : mailDomain),
+  /**
+   * Role mailboxes created automatically for the first operator (RFC 2142). Set to an empty
+   * string to disable.
+   */
+  systemInboxes: (process.env.SYSTEM_INBOXES ?? "abuse,postmaster,privacy")
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => /^[a-z0-9][a-z0-9._-]*$/.test(entry))
 } as const
 
 export const isEmailAllowed = (email: string): boolean => {

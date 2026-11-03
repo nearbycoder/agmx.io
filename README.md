@@ -76,16 +76,69 @@ Brand assets (favicons, app icons, Open Graph cards) are generated from [`src/br
 
 Other scripts: `bun run test` (Vitest, unit + end-to-end API tests against `TEST_DATABASE_URL`), `bun run typecheck`, `bun run build`, `bun run db:generate` (after schema changes), `bun run db:studio`.
 
+## Self-hosting with Docker Compose
+
+[`docker-compose.yml`](docker-compose.yml) runs the whole stack on one machine: Postgres, S3-compatible attachment storage ([RustFS](https://rustfs.com)), and AGMX itself. You don't need an AWS account to try it.
+
+```sh
+git clone https://github.com/nearbycoder/agmx.io && cd agmx.io
+ADMIN_EMAILS=you@example.com docker compose up --build
+```
+
+Open <http://localhost:3000>, enter your email and choose **Email me a sign-in link**. With `MAIL_TRANSPORT=log`, no mail leaves the machine. Instead, the sign-in link is printed to the app logs:
+
+```sh
+docker compose logs -f app   # copy the "Sign in to AGMX" link
+```
+
+Migrations run on boot. Data lives in the `postgres-data` and `s3-data` volumes. Inject test inbound mail with `curl -X POST localhost:3000/api/dev/inbound …` (as in [Local development](#local-development)).
+
+Configuration comes from your shell or a `.env` file next to `docker-compose.yml`. Compose reads it automatically, so keep `APP_URL=http://localhost:3000` there.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `ADMIN_EMAILS` | required | Operators: admin role and the Unlimited plan |
+| `ALLOWED_EMAILS` | same as `ADMIN_EMAILS` | Set to `*` to open sign-ups |
+| `BETTER_AUTH_SECRET` | placeholder | Set a real one (`openssl rand -base64 48`) anywhere beyond your laptop |
+| `APP_URL` | `http://localhost:3000` | Public URL, used in links and auth |
+| `MAIL_DOMAIN` | `agmx.localhost` | Domain agent inboxes live on |
+| `ENABLE_DEV_INBOUND` | `true` | The test-mail endpoint is unauthenticated. Set it to `false` before exposing the instance |
+
+**Switching to Amazon SES.** Complete the [Amazon SES](#2-amazon-ses) steps below for your `MAIL_DOMAIN`, then set these and run `docker compose up -d`:
+
+```sh
+MAIL_TRANSPORT=ses
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=…
+AWS_SECRET_ACCESS_KEY=…
+SES_CONFIGURATION_SET=agmx                  # optional: bounces/complaints/deliveries
+SYSTEM_FROM="AGMX <no-reply@your-domain>"   # must be on a verified SES identity
+APP_URL=https://mail.your-domain            # SNS must reach https://…/api/inbound/ses
+ENABLE_DEV_INBOUND=false
+```
+
+Ports are bound to `127.0.0.1`. To serve it publicly, put a TLS reverse proxy (Caddy, nginx, Traefik) in front of port 3000. Attachment downloads use signed URLs to the storage server, so either expose port 9000 at a public URL (and set `STORAGE_PUBLIC_ENDPOINT` to it) or point `STORAGE_*` at AWS S3 or Cloudflare R2.
+
 ## Deploying
 
 ### 1. Railway
 
-1. Create a project from this repository. Railway picks up `railway.json` and the `Dockerfile`.
+1. Create a project from this repository. The service builds from the `Dockerfile`.
 2. Add a **Postgres** service and set `DATABASE_URL=${{Postgres.DATABASE_URL}}` on the app.
 3. Set the variables from [`.env.example`](.env.example): at minimum `BETTER_AUTH_SECRET`, `APP_URL`, `MAIL_DOMAIN`, `ALLOWED_EMAILS`, `ADMIN_EMAILS` and the AWS keys.
 4. Add your custom domain (e.g. `agmx.io`) in Railway's networking settings.
 
 Migrations run automatically on boot. Health check: `GET /api/v1/health`.
+
+Service settings (Dockerfile builder, health check, restart policy, replicas, domain) are defined as [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code) in [`.railway/railway.ts`](.railway/railway.ts). Railway doesn't read that file during deploys; apply changes with the CLI:
+
+```sh
+railway link                 # pick your project + environment
+railway config plan          # preview; changes nothing
+railway config apply         # apply after reviewing the plan
+```
+
+For your own deployment, edit the repo, service name and domain in that file first. Variables are `preserve()`, so their values stay in Railway and out of git.
 
 ### 2. Amazon SES
 

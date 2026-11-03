@@ -29,6 +29,13 @@
       "when": 1793681660401,
       "tag": "0003_agent_safety",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793687570396,
+      "tag": "0004_agent_reputation",
+      "breakpoints": true
     }
   ]
 }

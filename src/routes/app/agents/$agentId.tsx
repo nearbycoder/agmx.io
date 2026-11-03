@@ -27,6 +27,7 @@ import { connectSnippets } from "~/components/dashboard/connect"
 import { CreateKeyDialog } from "~/components/dashboard/create-key-dialog"
 import { InboxStatusBadge } from "~/components/dashboard/inbox-badges"
 import { InboxRulesDialog, useRuleCount } from "~/components/dashboard/inbox-rules-dialog"
+import { ReputationSection, SendingPausedNotice } from "~/components/dashboard/reputation-section"
 import { SendingSection } from "~/components/dashboard/sending-section"
 import { usernameProblem } from "~/components/dashboard/username-hint"
 import { Button } from "~/components/ui/button"
@@ -127,6 +128,12 @@ function AgentPage() {
                 <span className={cn("size-1.5 rounded-full", paused ? "bg-warn" : "bg-ok")} />
                 {paused ? "Paused" : "Active"}
               </span>
+              {agent.sendingPaused && !paused ? (
+                <>
+                  <span className="text-faint">·</span>
+                  <span className="font-medium text-danger">Sending paused</span>
+                </>
+              ) : null}
               <span className="text-faint">·</span>
               <span>Created {relativeTime(agent.createdAt)}</span>
             </div>
@@ -149,8 +156,10 @@ function AgentPage() {
 
       <div className="flex max-w-4xl flex-col gap-10">
         {paused ? <Notice tone="warn">This agent is paused. Incoming mail is dropped and sending is blocked until you resume it.</Notice> : null}
+        <SendingPausedNotice agent={agent} />
         <InboxesSection agentId={agent.id} agentName={agent.name} inboxes={agent.inboxes} />
         <SendingSection agentId={agent.id} sendPolicy={agent.sendPolicy} approveAttachments={agent.approveAttachments} />
+        <ReputationSection agent={agent} />
         <KeysSection agentId={agent.id} />
         <WebhookSection agentId={agent.id} webhookUrl={agent.webhookUrl} secret={agent.webhookSecret} />
         <ConnectSection />

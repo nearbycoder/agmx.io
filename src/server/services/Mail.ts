@@ -11,7 +11,7 @@ import { newId } from "../ids"
 import { composeMime, escapeHtml, htmlToText, makeSnippet, quoteText } from "../mail/compose"
 import { attachmentText, isCalendar } from "../mail/attachment-text"
 import { extract } from "../mail/extract"
-import { analyzeSecurity } from "../mail/security"
+import { analyzeSecurity, senderAuthentication, withholdSensitive, withSenderAuth } from "../mail/security"
 import { parseMime, type ParsedEmail } from "../mail/parse"
 import { toMessage, toMessageSummary, toThread } from "../serialize"
 import { Agents } from "./Agents"
@@ -20,6 +20,7 @@ import { Db } from "./Db"
 import { Events } from "./Events"
 import { MailTransport } from "./MailTransport"
 import { Quota } from "./Quota"
+import { Reputation } from "./Reputation"
 import { Storage } from "./Storage"
 import { Webhooks } from "./Webhooks"
 
@@ -141,6 +142,7 @@ export class Mail extends Context.Service<Mail, {
       const webhooks = yield* Webhooks
       const agentsService = yield* Agents
       const storage = yield* Storage
+      const reputation = yield* Reputation
 
       /**
        * Upload attachment bytes to object storage (when configured) and build the
@@ -150,7 +152,7 @@ export class Mail extends Context.Service<Mail, {
       const prepareAttachments = (
         userId: string,
         messageId: string,
-        files: ReadonlyArray<{ filename: string; contentType: string; content: Buffer; contentId?: string | null; inline?: boolean; extractedText?: string | null }>
+        files: ReadonlyArray<{ filename: string; contentType: string; content: Buffer; contentId?: string | null; inline?: boolean; extractedText?: string | null; quarantined?: boolean }>
       ) =>
         Effect.gen(function* () {
           const rows = yield* Effect.forEach(
@@ -158,7 +160,7 @@ export class Mail extends Context.Service<Mail, {
             (f) =>
               Effect.gen(function* () {
                 const id = newId("att")
-                const storageKey = yield* storage.put(`attachments/${userId}/${messageId}/${id}`, f.content, f.contentType)
+                const storageKey = f.quarantined ? null : yield* storage.put(`attachments/${userId}/${messageId}/${id}`, f.content, f.contentType)
                 return {
                   id,
                   userId,
@@ -168,7 +170,7 @@ export class Mail extends Context.Service<Mail, {
                   size: f.content.byteLength,
                   contentId: f.contentId ?? null,
                   inline: f.inline ?? false,
-                  content: storageKey ? null : f.content,
+                  content: storageKey || f.quarantined ? null : f.content,
                   storageKey,
                   extractedText: f.extractedText ?? null
                 }
@@ -180,6 +182,7 @@ export class Mail extends Context.Service<Mail, {
         })
 
       /** Attachment bytes, wherever they are stored. */
+      const hasBytes = (row: { content: Buffer | null; storageKey: string | null }) => row.content !== null || row.storageKey !== null
       const attachmentBytes = (row: { content: Buffer | null; storageKey: string | null }) =>
         row.content ? Effect.succeed(row.content) : storage.get(row.storageKey!)
 
@@ -363,7 +366,7 @@ export class Mail extends Context.Service<Mail, {
       const deliverToInbox = Effect.fn("Mail.deliverToInbox")(function* (
         inbox: InboxRow,
         parsed: ParsedEmail,
-        options: { tag: string | null; verdicts: Verdicts }
+        options: { tag: string | null; verdicts: Verdicts; internal?: boolean }
       ) {
         // Temporary inboxes: expired or full inboxes stop accepting mail.
         if (inbox.expiresAt && inbox.expiresAt.getTime() < Date.now()) {
@@ -393,20 +396,27 @@ export class Mail extends Context.Service<Mail, {
           return null
         }
         const messageId = newId("msg")
-        const isSpam = options.verdicts.spam === "FAIL" || options.verdicts.virus === "FAIL"
+        const hasVirus = options.verdicts.virus?.toUpperCase() === "FAIL"
+        const isSpam = options.verdicts.spam?.toUpperCase() === "FAIL" || hasVirus
 
         // Security first, then extract only from what a human would actually see.
         const scan = analyzeSecurity(parsed.subject, parsed.text, parsed.html)
-        const calendars = parsed.attachments.filter((a) => isCalendar(a.contentType, a.filename)).map((a) => a.content.toString("utf8"))
-        const files = yield* Effect.forEach(
-          parsed.attachments,
-          (a) => Effect.promise(() => attachmentText(a.contentType, a.filename, a.content)).pipe(Effect.map((extractedText) => ({ ...a, extractedText }))),
-          { concurrency: 2 }
-        )
-        const extracted = extract(parsed.subject, scan.safeText, scan.visibleHtml, {
+        const sender = senderAuthentication(options.verdicts, options.internal ?? false)
+        scan.security = withSenderAuth(scan.security, sender, hasVirus)
+        // Malware: keep the attachment names for the record but never store, parse or serve the bytes.
+        const calendars = hasVirus ? [] : parsed.attachments.filter((a) => isCalendar(a.contentType, a.filename)).map((a) => a.content.toString("utf8"))
+        const files = hasVirus
+          ? parsed.attachments.map((a) => ({ ...a, extractedText: null, quarantined: true }))
+          : yield* Effect.forEach(
+              parsed.attachments,
+              (a) => Effect.promise(() => attachmentText(a.contentType, a.filename, a.content)).pipe(Effect.map((extractedText) => ({ ...a, extractedText }))),
+              { concurrency: 2 }
+            )
+        const fullExtraction = extract(parsed.subject, scan.safeText, scan.visibleHtml, {
           calendars,
           merchant: parsed.from.name || parsed.from.address.split("@")[1] || null
         })
+        const extracted = sender === "failed" ? withholdSensitive(fullExtraction) : fullExtraction
         const prepared = yield* prepareAttachments(inbox.userId, messageId, files)
         const threadId = yield* db.transaction(
           Effect.gen(function* () {
@@ -474,7 +484,8 @@ export class Mail extends Context.Service<Mail, {
       const ingestParsed = Effect.fn("Mail.ingestParsed")(function* (
         parsed: ParsedEmail,
         recipients: ReadonlyArray<string>,
-        verdicts: Verdicts
+        verdicts: Verdicts,
+        internal = false
       ) {
         const inboxIds: Array<string> = []
         const seen = new Set<string>()
@@ -486,7 +497,7 @@ export class Mail extends Context.Service<Mail, {
             yield* Effect.logInfo(`Dropping mail for paused inbox ${match.inbox.address}`)
             continue
           }
-          const delivered = yield* deliverToInbox(match.inbox, parsed, { tag: match.tag, verdicts })
+          const delivered = yield* deliverToInbox(match.inbox, parsed, { tag: match.tag, verdicts, internal })
           if (delivered) inboxIds.push(match.inbox.id)
         }
         return { delivered: inboxIds.length, inboxIds }
@@ -634,6 +645,9 @@ export class Mail extends Context.Service<Mail, {
           ? `${inbox.address} is a temporary inbox that reached its message limit, so it's closed.`
           : `${inbox.address} (or its agent) is paused. Resume it before sending.`
 
+      const pausedMessage = (agent: AgentRow) =>
+        `Sending is paused for ${agent.name}: ${agent.sendingPausedReason ?? "paused by a human."} A human must resume sending from the AGMX dashboard. Receiving still works.`
+
       const loadAgentFor = (inbox: InboxRow) =>
         db.use((d) => d.select().from(agents).where(eq(agents.id, inbox.agentId)).limit(1)).pipe(Effect.map((rows) => rows[0]!))
 
@@ -665,6 +679,7 @@ export class Mail extends Context.Service<Mail, {
         const agent = yield* loadAgentFor(inbox)
         if (mode === "send" && (inbox.status !== "active" || agent.status !== "active"))
           return yield* new Forbidden({ message: inactiveMessage(inbox) })
+        if (mode === "send" && agent.sendingPausedAt) return yield* new Forbidden({ message: pausedMessage(agent) })
 
         const recipients = yield* parseRecipients(input)
         const files = yield* decodeFiles(input.attachments)
@@ -766,6 +781,12 @@ export class Mail extends Context.Service<Mail, {
 
         const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, row.inboxId)))
         if (!inbox) return yield* new NotFound({ message: "Inbox not found.", resource: "inbox" })
+        const sender = yield* loadAgentFor(inbox)
+        if (sender.sendingPausedAt) {
+          const message = pausedMessage(sender)
+          yield* fail(message)
+          return yield* new Forbidden({ message })
+        }
         const all = [...row.to, ...row.cc, ...row.bcc]
         const suppressed = yield* suppressedAmong(all.map((a) => a.address))
         if (suppressed.length) {
@@ -780,7 +801,7 @@ export class Mail extends Context.Service<Mail, {
             .from(attachments)
             .where(eq(attachments.messageId, row.id))
         )
-        const files = yield* Effect.forEach(stored, (f) =>
+        const files = yield* Effect.forEach(stored.filter(hasBytes), (f) =>
           attachmentBytes(f).pipe(Effect.map((content) => ({ filename: f.filename, contentType: f.contentType, content })))
         )
         const rfcMessageId = `<${newId("msg").replace("msg_", "")}@${inbox.domain}>`
@@ -833,12 +854,17 @@ export class Mail extends Context.Service<Mail, {
         if (external.length) {
           const result = yield* transport
             .send({ from: formatAddress(fromAddress), recipients: external, raw })
-            .pipe(Effect.tapError((error) => fail(error.message, all.length)))
+            .pipe(
+              Effect.tapError((error) =>
+                // SES refusing mail (throttling, sending paused, credentials) affects everyone: alert the operator.
+                Effect.andThen(fail(error.message, all.length), Effect.logError(`SES send failed from ${inbox.address}: ${error.message}`))
+              )
+            )
           providerMessageId = result.providerMessageId
         }
         if (local.length) {
           const parsed = yield* Effect.promise(() => parseMime(raw))
-          yield* ingestParsed(parsed, local, {})
+          yield* ingestParsed(parsed, local, {}, true)
         }
 
         const usedSes = transport.name === "ses" && providerMessageId !== null
@@ -902,7 +928,8 @@ export class Mail extends Context.Service<Mail, {
               .from(attachments)
               .where(eq(attachments.messageId, original.id))
           )
-          const files = yield* Effect.forEach(stored, (f) =>
+          // Quarantined (malware) attachments have no bytes and are never forwarded.
+          const files = yield* Effect.forEach(stored.filter(hasBytes), (f) =>
             attachmentBytes(f).pipe(Effect.map((content) => ({ filename: f.filename, contentType: f.contentType, content })))
           )
           const header = [
@@ -1102,6 +1129,8 @@ export class Mail extends Context.Service<Mail, {
               .limit(1)
           )
           if (!row) return yield* new NotFound({ message: "Attachment not found.", resource: "attachment" })
+          if (!hasBytes(row))
+            return yield* new NotFound({ message: "This attachment was quarantined: the mail scanner flagged it as malware, so it was never stored.", resource: "attachment" })
           return row
         }),
 
@@ -1226,6 +1255,7 @@ export class Mail extends Context.Service<Mail, {
           const agent = yield* loadAgentFor(inbox)
           if (inbox.status !== "active" || agent.status !== "active")
             return yield* new Forbidden({ message: inactiveMessage(inbox) })
+          if (agent.sendingPausedAt) return yield* new Forbidden({ message: pausedMessage(agent) })
           const [att] = yield* db.use((d) => d.select({ n: count() }).from(attachments).where(eq(attachments.messageId, draft.id)))
           const all = yield* assertSendable(
             { to: draft.to.map((a) => ({ name: a.name ?? null, address: a.address })), cc: [], bcc: [...draft.cc, ...draft.bcc].map((a) => ({ name: a.name ?? null, address: a.address })), replyTo: [] },
@@ -1259,6 +1289,11 @@ export class Mail extends Context.Service<Mail, {
         approve: Effect.fn("Mail.approve")(function* (principal, messageId) {
           yield* requireAccount(principal, "approve messages")
           const held = yield* requireOutbound(principal, messageId, ["pending_approval"], "approved")
+          const [heldInbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, held.inboxId)))
+          if (heldInbox) {
+            const agent = yield* loadAgentFor(heldInbox)
+            if (agent.sendingPausedAt) return yield* new Forbidden({ message: pausedMessage(agent) })
+          }
           const scheduled = held.sendAt !== null && held.sendAt.getTime() > Date.now() + 5_000
           const row = yield* transition(held.id, ["pending_approval"], {
             status: scheduled ? "scheduled" : "sending",
@@ -1300,7 +1335,14 @@ export class Mail extends Context.Service<Mail, {
               const ids = await d
                 .select({ id: messages.id })
                 .from(messages)
-                .where(and(eq(messages.status, "scheduled"), lte(messages.sendAt, new Date())))
+                .where(
+                  and(
+                    eq(messages.status, "scheduled"),
+                    lte(messages.sendAt, new Date()),
+                    // Scheduled mail from agents with paused sending waits until a human resumes them.
+                    sql`not exists (select 1 from ${inboxes} join ${agents} on ${agents.id} = ${inboxes.agentId} where ${inboxes.id} = ${messages.inboxId} and ${agents.sendingPausedAt} is not null)`
+                  )
+                )
                 .orderBy(asc(messages.sendAt))
                 .limit(20)
                 .for("update", { skipLocked: true })
@@ -1438,6 +1480,7 @@ export class Mail extends Context.Service<Mail, {
             )
             yield* events.publish({ type: "message.status", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
             const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, row.inboxId)))
+            if (inbox && event !== "delivered") yield* reputation.evaluate(inbox.agentId)
             if (inbox) {
               yield* webhooks.enqueue(inbox.agentId, `message.${event}`, {
                 inbox: { id: inbox.id, address: inbox.address },

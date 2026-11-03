@@ -73,9 +73,17 @@ export function MarketingFooter() {
         </div>
         <div className="mt-14 flex items-center justify-between gap-4 border-t border-line pt-6 text-[12px] text-muted">
           <span>© {new Date().getFullYear()} AGMX · MIT licensed</span>
-          <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-ink" aria-label="GitHub">
-            <GithubIcon />
-          </a>
+          <div className="flex items-center gap-5">
+            <Link to="/terms" className="transition-colors hover:text-ink">
+              Terms
+            </Link>
+            <Link to="/privacy" className="transition-colors hover:text-ink">
+              Privacy
+            </Link>
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-ink" aria-label="GitHub">
+              <GithubIcon />
+            </a>
+          </div>
         </div>
       </div>
     </footer>

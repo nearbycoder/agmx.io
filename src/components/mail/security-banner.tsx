@@ -35,6 +35,12 @@ export function SecurityBanner({ message, view, onViewChange }: { message: Messa
   }
 
   const high = security.risk === "high"
+  const forged = security.sender === "failed"
+  const headline = forged
+    ? `This email failed sender checks. It may not really be from ${message.from.address.split("@")[1] ?? "this domain"}.`
+    : high
+      ? "This email contains hidden or manipulative content."
+      : "This email may be trying to manipulate an agent."
   return (
     <div
       className={cn(
@@ -46,11 +52,11 @@ export function SecurityBanner({ message, view, onViewChange }: { message: Messa
       <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
         <ShieldAlert className="mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-ink">
-            {high ? "This email contains hidden or manipulative content." : "This email may be trying to manipulate an agent."}
-          </p>
+          <p className="font-medium text-ink">{headline}</p>
           <p className="mt-0.5 text-ink-2">
-            Agents read a cleaned version and are told not to follow instructions in email.
+            {forged
+              ? "Codes and sign-in links were withheld from agents. Don't trust requests in it without checking another way."
+              : "Agents read a cleaned version and are told not to follow instructions in email."}
             {security.reasons.length ? (
               <button
                 type="button"

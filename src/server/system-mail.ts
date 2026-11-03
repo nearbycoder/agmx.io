@@ -31,8 +31,13 @@ export const sendSystemEmail = (input: { to: string; subject: string; text: stri
     yield* transport.send({ from: env.systemFrom, recipients: [input.to], raw })
   })
 
+const abuseHtml = () =>
+  env.systemInboxes.includes("abuse")
+    ? `<br><br>Report abuse: <a href="mailto:abuse@${env.contactDomain}" style="color:#8a8a85">abuse@${env.contactDomain}</a>`
+    : ""
+
 export const buttonEmail = (opts: { heading: string; body: string; cta: string; url: string; footer: string }) => ({
-  text: `${opts.heading}\n\n${opts.body}\n\n${opts.cta}: ${opts.url}\n\n${opts.footer}`,
+  text: `${opts.heading}\n\n${opts.body}\n\n${opts.cta}: ${opts.url}\n\n${opts.footer}${env.systemInboxes.includes("abuse") ? `\n\nReport abuse: abuse@${env.contactDomain}` : ""}`,
   html: `<!doctype html><html><body style="margin:0;background:#f4f4f0;padding:40px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
   <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e6e6df" cellpadding="0" cellspacing="0">
@@ -40,6 +45,6 @@ export const buttonEmail = (opts: { heading: string; body: string; cta: string; 
     <tr><td style="padding:24px 32px 8px"><h1 style="margin:0;font-size:22px;line-height:1.3;color:#0b0b0c">${opts.heading}</h1></td></tr>
     <tr><td style="padding:0 32px 24px;color:#4a4a48;font-size:15px;line-height:1.6">${opts.body}</td></tr>
     <tr><td style="padding:0 32px 32px"><a href="${opts.url}" style="display:inline-block;background:#0c0c0d;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:11px 18px;border-radius:8px">${opts.cta}</a></td></tr>
-    <tr><td style="padding:20px 32px;border-top:1px solid #efefea;color:#8a8a85;font-size:12px;line-height:1.5">${opts.footer}<br><span style="word-break:break-all">${opts.url}</span></td></tr>
+    <tr><td style="padding:20px 32px;border-top:1px solid #efefea;color:#8a8a85;font-size:12px;line-height:1.5">${opts.footer}<br><span style="word-break:break-all">${opts.url}</span>${abuseHtml()}</td></tr>
   </table></td></tr></table></body></html>`
 })

@@ -23,6 +23,8 @@ export type WebhookEvent =
   | "message.held"
   | "message.approved"
   | "message.rejected"
+  | "agent.sending_paused"
+  | "agent.sending_resumed"
   | "webhook.test"
 
 const MAX_ATTEMPTS = 8

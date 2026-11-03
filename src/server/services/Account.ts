@@ -1,12 +1,27 @@
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm"
+import { and, asc, desc, eq, getTableColumns, gte, inArray, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schedule } from "effect"
 import type { Principal } from "~/shared/api/Authorization"
 import type * as D from "~/shared/api/domain"
-import { Forbidden, NotFound } from "~/shared/api/errors"
+import { Forbidden, InvalidRequest, NotFound } from "~/shared/api/errors"
 import { PLANS, getPlan, type Plan } from "~/shared/plans"
-import { agentSignups, agents, domains, inboxes, messages, storageDeletions, threads, usageDaily, user } from "../db/schema"
+import {
+  agentSignups,
+  agents,
+  apiKeys,
+  attachments,
+  domains,
+  inboxRules,
+  inboxes,
+  messages,
+  session,
+  storageDeletions,
+  threads,
+  usageDaily,
+  user
+} from "../db/schema"
 import { env } from "../env"
-import { requireAdmin } from "./access"
+import { newId, randomToken } from "../ids"
+import { requireAccount, requireAdmin } from "./access"
 import { Db } from "./Db"
 import { MailTransport } from "./MailTransport"
 import { Storage } from "./Storage"
@@ -27,12 +42,32 @@ const planLimits = (plan: Plan): typeof D.PlanLimits.Type => ({
   maxMessageMb: plan.maxMessageMb
 })
 
+export interface AccountExport {
+  readonly format: "agmx-export"
+  readonly version: 1
+  readonly exportedAt: string
+  readonly profile: Record<string, unknown>
+  readonly agents: ReadonlyArray<Record<string, unknown>>
+  readonly inboxes: ReadonlyArray<Record<string, unknown>>
+  readonly rules: ReadonlyArray<Record<string, unknown>>
+  readonly domains: ReadonlyArray<Record<string, unknown>>
+  readonly apiKeys: ReadonlyArray<Record<string, unknown>>
+  readonly threads: ReadonlyArray<Record<string, unknown>>
+  readonly messages: ReadonlyArray<Record<string, unknown>>
+  readonly attachments: ReadonlyArray<Record<string, unknown>>
+  readonly usage: ReadonlyArray<Record<string, unknown>>
+}
+
 export class Account extends Context.Service<Account, {
   me(principal: Principal): Effect.Effect<typeof D.Me.Type>
   usage(principal: Principal, days: number): Effect.Effect<typeof D.UsageSeries.Type>
   adminUsers(principal: Principal): Effect.Effect<Array<typeof D.AdminUser.Type>, Forbidden>
   adminUpdateUser(principal: Principal, userId: string, patch: typeof D.UpdateAdminUserPayload.Type): Effect.Effect<typeof D.AdminUser.Type, Forbidden | NotFound>
   system(principal: Principal): Effect.Effect<typeof D.SystemStatus.Type, Forbidden>
+  /** Everything stored for the account, minus secrets and attachment bytes. */
+  exportData(principal: Principal): Effect.Effect<AccountExport, Forbidden>
+  /** Permanently deletes the account and all of its data. Dashboard sessions only. */
+  deleteAccount(principal: Principal, confirm: string): Effect.Effect<void, Forbidden | InvalidRequest>
 }>()("agmx/services/Account") {
   static readonly layer = Layer.effect(
     Account,
@@ -168,15 +203,96 @@ export class Account extends Context.Service<Account, {
             sesAccount: account._tag === "Success" ? account.success : null,
             sesError: account._tag === "Failure" ? account.failure.message : null
           }
+        }),
+
+        exportData: Effect.fn("Account.exportData")(function* (principal) {
+          yield* requireAccount(principal, "export account data")
+          const userId = principal.userId
+          const [profile] = yield* db.use((d) =>
+            d
+              .select({ id: user.id, email: user.email, name: user.name, role: user.role, plan: user.plan, createdAt: user.createdAt })
+              .from(user)
+              .where(eq(user.id, userId))
+          )
+          // Secrets (webhook signing secrets, key hashes) and attachment bytes are deliberately left out.
+          const { webhookSecret: _secret, ...agentColumns } = getTableColumns(agents)
+          const { keyHash: _hash, ...keyColumns } = getTableColumns(apiKeys)
+          const { content: _content, storageKey: _key, ...attachmentColumns } = getTableColumns(attachments)
+          const [agentRows, inboxRows, ruleRows, domainRows, keyRows, threadRows, messageRows, attachmentRows, usageRows] = yield* Effect.all(
+            [
+              db.use((d) => d.select(agentColumns).from(agents).where(eq(agents.userId, userId)).orderBy(asc(agents.createdAt))),
+              db.use((d) => d.select().from(inboxes).where(eq(inboxes.userId, userId)).orderBy(asc(inboxes.createdAt))),
+              db.use((d) => d.select().from(inboxRules).where(eq(inboxRules.userId, userId)).orderBy(asc(inboxRules.inboxId), asc(inboxRules.position))),
+              db.use((d) => d.select().from(domains).where(eq(domains.userId, userId)).orderBy(asc(domains.createdAt))),
+              db.use((d) => d.select(keyColumns).from(apiKeys).where(eq(apiKeys.userId, userId)).orderBy(asc(apiKeys.createdAt))),
+              db.use((d) => d.select().from(threads).where(eq(threads.userId, userId)).orderBy(asc(threads.createdAt))),
+              db.use((d) => d.select().from(messages).where(eq(messages.userId, userId)).orderBy(asc(messages.createdAt))),
+              db.use((d) => d.select(attachmentColumns).from(attachments).where(eq(attachments.userId, userId)).orderBy(asc(attachments.createdAt))),
+              db.use((d) => d.select().from(usageDaily).where(eq(usageDaily.userId, userId)).orderBy(asc(usageDaily.day)))
+            ],
+            { concurrency: 3 }
+          )
+          return {
+            format: "agmx-export",
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            profile: profile ?? { id: userId, email: principal.email },
+            agents: agentRows,
+            inboxes: inboxRows,
+            rules: ruleRows,
+            domains: domainRows,
+            apiKeys: keyRows,
+            threads: threadRows,
+            messages: messageRows,
+            attachments: attachmentRows,
+            usage: usageRows
+          } satisfies AccountExport
+        }),
+
+        deleteAccount: Effect.fn("Account.deleteAccount")(function* (principal, confirm) {
+          if (principal.kind !== "session")
+            return yield* new Forbidden({ message: "Only a signed-in human can delete an account. Use the dashboard: Settings → Your data." })
+          const [row] = yield* db.use((d) => d.select({ email: user.email }).from(user).where(eq(user.id, principal.userId)))
+          if (!row) return yield* new Forbidden({ message: "Account not found." })
+          if (confirm.trim().toLowerCase() !== row.email.toLowerCase())
+            return yield* new InvalidRequest({ message: "Type your account email exactly to confirm.", field: "confirm" })
+
+          // Stop receiving and sending for custom domains before their rows go away.
+          const domainRows = yield* db.use((d) => d.select({ name: domains.name }).from(domains).where(eq(domains.userId, principal.userId)))
+          for (const domain of domainRows) {
+            yield* transport.setReceiving(domain.name, false).pipe(
+              Effect.catchCause((cause) => Effect.logWarning(`Could not stop receiving for ${domain.name}`, cause))
+            )
+            yield* transport.deleteDomainIdentity(domain.name).pipe(
+              Effect.catchCause((cause) => Effect.logWarning(`Could not delete SES identity ${domain.name}`, cause))
+            )
+          }
+
+          // Everything else cascades from the user row: agents, inboxes, mail, attachments (whose
+          // object-storage keys are queued by a trigger), keys, usage, rules, sessions and logins.
+          yield* db.transaction(
+            Effect.gen(function* () {
+              yield* db.use((d) => d.delete(session).where(eq(session.userId, principal.userId)))
+              yield* db.use((d) => d.delete(user).where(eq(user.id, principal.userId)))
+            })
+          )
+          yield* Effect.logInfo(`Deleted account ${principal.userId} (${domainRows.length} custom domain(s))`)
         })
       })
     })
   )
 
-  /** Hourly housekeeping: plan retention and stale sign-up requests. */
+  /** Hourly housekeeping: plan retention, stale sign-up requests and the operator's role mailboxes. */
   static readonly maintenance = Layer.effectDiscard(
     Effect.gen(function* () {
       const db = yield* Db
+
+      yield* ensureSystemInboxes(db).pipe(
+        Effect.catchCause((cause) => Effect.logError("Could not ensure system inboxes", cause)),
+        Effect.repeat(Schedule.spaced("1 hour")),
+        Effect.delay("10 seconds"),
+        Effect.forkScoped
+      )
       const tick = Effect.gen(function* () {
         for (const plan of Object.values(PLANS)) {
           if (plan.retentionDays === null) continue
@@ -233,3 +349,65 @@ export class Account extends Context.Service<Account, {
   )
 }
 
+
+/**
+ * RFC 2142 role mailboxes (abuse@, postmaster@, privacy@) on the operator domain, owned by the
+ * first operator in an "Operator" agent so reports land in the dashboard like any other mail.
+ * Idempotent: creates only what's missing and never touches existing inboxes.
+ */
+export const ensureSystemInboxes = Effect.fn("Account.ensureSystemInboxes")(function* (db: typeof Db.Service) {
+  if (env.systemInboxes.length === 0 || env.adminEmails.length === 0) return
+  const [owner] = yield* db.use((d) =>
+    d
+      .select({ id: user.id })
+      .from(user)
+      .where(and(eq(user.role, "admin"), inArray(sql`lower(${user.email})`, env.adminEmails)))
+      .orderBy(asc(user.createdAt))
+      .limit(1)
+  )
+  if (!owner) return
+  const domain = env.contactDomain
+  const wanted = env.systemInboxes.map((local) => `${local}@${domain}`)
+  const existing = yield* db.use((d) => d.select({ address: inboxes.address }).from(inboxes).where(inArray(inboxes.address, wanted)))
+  const missing = wanted.filter((address) => !existing.some((row) => row.address === address))
+  if (missing.length === 0) return
+
+  let [agent] = yield* db.use((d) =>
+    d.select({ id: agents.id }).from(agents).where(and(eq(agents.userId, owner.id), eq(agents.name, SYSTEM_AGENT_NAME))).limit(1)
+  )
+  if (!agent) {
+    ;[agent] = yield* db.use((d) =>
+      d
+        .insert(agents)
+        .values({
+          id: newId("agt"),
+          userId: owner.id,
+          name: SYSTEM_AGENT_NAME,
+          description: "Role mailboxes for this AGMX instance (abuse, postmaster, privacy). Created automatically.",
+          color: "slate",
+          webhookSecret: `whsec_${randomToken(32)}`
+        })
+        .returning({ id: agents.id })
+    )
+  }
+  for (const address of missing) {
+    const localPart = address.slice(0, address.indexOf("@"))
+    yield* db.use((d) =>
+      d
+        .insert(inboxes)
+        .values({
+          id: newId("inb"),
+          userId: owner.id,
+          agentId: agent!.id,
+          localPart,
+          domain,
+          address,
+          displayName: `${env.operatorName} ${localPart}`
+        })
+        .onConflictDoNothing({ target: inboxes.address })
+    )
+  }
+  yield* Effect.logInfo(`Created system inboxes: ${missing.join(", ")}`)
+})
+
+const SYSTEM_AGENT_NAME = "Operator"

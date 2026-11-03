@@ -29,7 +29,26 @@ export class AccountGroup extends HttpApiGroup.make("account")
     HttpApiEndpoint.get("usage", "/usage", {
       query: { days: Schema.optional(Schema.Int) },
       success: D.UsageSeries
-    }).annotateMerge(doc("Daily usage", "Sent and received counts per UTC day."))
+    }).annotateMerge(doc("Daily usage", "Sent and received counts per UTC day.")),
+    HttpApiEndpoint.get("exportData", "/account/export", {
+      success: Schema.Unknown,
+      error: Forbidden
+    }).annotateMerge(
+      doc(
+        "Export account data",
+        "Downloads everything stored for the account as one JSON file: profile, agents, inboxes, rules, domains, API key metadata, threads, messages, attachment metadata and usage. Secrets, key hashes and attachment bytes are not included. Dashboard sessions and account keys only."
+      )
+    ),
+    HttpApiEndpoint.delete("deleteAccount", "/account", {
+      payload: D.DeleteAccountPayload,
+      success: Ok,
+      error: [Forbidden, InvalidRequest]
+    }).annotateMerge(
+      doc(
+        "Delete account",
+        "Permanently deletes the account and all of its agents, inboxes, mail, attachments, keys and custom domains. Requires a signed-in dashboard session and `confirm` set to the account email. This cannot be undone."
+      )
+    )
   )
   .middleware(Authorization)
   .annotateMerge(OpenApi.annotations({ title: "Account" }))
@@ -75,7 +94,30 @@ export class AgentsGroup extends HttpApiGroup.make("agents")
       params: IdParam("agentId"),
       success: Schema.Array(D.WebhookDelivery),
       error: NotFound
-    }).annotateMerge(doc("Recent webhook deliveries"))
+    }).annotateMerge(doc("Recent webhook deliveries")),
+    HttpApiEndpoint.get("reputation", "/agents/:agentId/reputation", {
+      params: IdParam("agentId"),
+      success: D.AgentReputation,
+      error: NotFound
+    }).annotateMerge(
+      doc(
+        "Sending reputation",
+        "Bounces and spam complaints for mail this agent sent. AGMX pauses an agent's sending automatically when it reaches 5+ hard bounces at a 5%+ rate, or 2+ complaints at a 0.1%+ rate."
+      )
+    ),
+    HttpApiEndpoint.post("pauseSending", "/agents/:agentId/sending/pause", {
+      params: IdParam("agentId"),
+      payload: D.PauseSendingPayload,
+      success: D.AgentReputation,
+      error: NotFound
+    }).annotateMerge(doc("Pause sending", "Stops all outgoing mail from the agent's inboxes. Receiving continues. Scheduled mail waits.")),
+    HttpApiEndpoint.post("resumeSending", "/agents/:agentId/sending/resume", {
+      params: IdParam("agentId"),
+      success: D.AgentReputation,
+      error: [NotFound, Forbidden]
+    }).annotateMerge(
+      doc("Resume sending", "Humans and account keys only. Starts a fresh reputation window, so fix the cause of the bounces or complaints first.")
+    )
   )
   .middleware(Authorization)
   .annotateMerge(OpenApi.annotations({ title: "Agents", description: "An agent owns one or more inboxes and can have its own scoped API key." }))

@@ -65,6 +65,7 @@ const NAV: Array<{ group: string; items: Array<{ id: string; label: string }> }>
     items: [
       { id: "errors", label: "Errors" },
       { id: "limits", label: "Plans & limits" },
+      { id: "your-data", label: "Export & deletion" },
       { id: "self-hosting", label: "Self-hosting" },
       { id: "api-reference", label: "API reference" }
     ]
@@ -632,7 +633,8 @@ const code = message.extracted.codes[0]`}
   "risk": "high",
   "score": 8,
   "reasons": ["hidden text (white-on-white text)", "hidden content asks the reader to send credentials or codes"],
-  "hiddenContent": true
+  "hiddenContent": true,
+  "sender": "verified"
 },
 "safeText": "Hi! Here is the agenda for Tuesday."`}
           />
@@ -644,6 +646,14 @@ const code = message.extracted.codes[0]`}
             <li>
               <strong>security.risk</strong> is <code>low</code>, <code>medium</code> or <code>high</code>, with human-readable <code>reasons</code>. List responses and webhook
               payloads include it too.
+            </li>
+            <li>
+              <strong>security.sender</strong> says whether the From address is authentic, from the SPF, DKIM and DMARC checks SES runs: <code>verified</code> (DMARC pass,
+              or mail from another AGMX inbox), <code>unknown</code> (the domain publishes no policy) or <code>failed</code> (likely forged). Forged mail is at least{" "}
+              <code>medium</code> risk, and its codes and sign-in links are withheld from <code>extracted</code>, so a fake "your GitHub code is…" can't be acted on.
+            </li>
+            <li>
+              Attachments the scanner flags as malware are quarantined: the message lists them, but the bytes are never stored, forwarded or served.
             </li>
             <li>
               The MCP tools return <code>safeText</code> and the security report by default and omit raw HTML unless asked (<code>includeRaw</code>).
@@ -706,6 +716,8 @@ const code = message.extracted.codes[0]`}
               [<code key="e">message.held</code>, "A message is waiting for approval under the agent's send policy. Includes the reason."],
               [<code key="e">message.approved</code>, "A human approved a held message (it's sent right after, or at sendAt)."],
               [<code key="e">message.rejected</code>, "A human rejected a held message. Includes the reason, if given."],
+              [<code key="e">agent.sending_paused</code>, "Sending was paused, automatically for bounces or complaints, or by a human. Includes the reason."],
+              [<code key="e">agent.sending_resumed</code>, "A human resumed sending."],
               [<code key="e">webhook.test</code>, "Sent from the dashboard or POST /agents/{id}/webhook-test."]
             ]}
           />
@@ -928,10 +940,11 @@ const { apiKey, inbox, client } = await Agmx.signup({
             rows={[
               ["401", <code key="c">Unauthorized</code>, "Missing, invalid or revoked key."],
               ["402", <code key="c">QuotaExceeded</code>, <>Plan limit reached. <code>limit</code> is one of agents, inboxes_per_agent, monthly_sends, daily_sends, custom_domains, message_size.</>],
-              ["403", <code key="c">Forbidden</code>, "Not allowed with this key type, or the inbox is paused."],
+              ["403", <code key="c">Forbidden</code>, "Not allowed with this key type, the inbox is paused, or the agent's sending is paused for bounces or complaints."],
               ["404", <code key="c">NotFound</code>, <>Doesn't exist or isn't visible to this key. Includes <code>resource</code>.</>],
               ["409", <code key="c">Conflict</code>, "Already exists (a taken username), or the message is in the wrong state — e.g. approving mail that was already decided."],
               ["422", <code key="c">InvalidRequest</code>, <>Validation failed; <code>field</code> names the culprit when known.</>],
+              ["429", <code key="c">RateLimited</code>, <>Too many requests. Wait <code>retryAfter</code> seconds (also sent as <code>Retry-After</code>).</>],
               ["502", <code key="c">DeliveryFailed</code>, "Amazon SES rejected or failed the request."]
             ]}
           />
@@ -951,7 +964,39 @@ const { apiKey, inbox, client } = await Agmx.signup({
               Received messages per month and maximum inbound size — mail over either is dropped and counted in <code>usage.droppedThisMonth</code>.
             </li>
             <li>Maximum message size including attachments, and message retention.</li>
+            <li>
+              Request rate: 600 API/MCP requests a minute per key or session, 120 a minute per IP without credentials, 10 agent sign-ups an hour per IP, and tighter
+              budgets on sign-in links and password resets. Over the limit you get <code>429</code> with <code>Retry-After</code>.
+            </li>
           </ul>
+          <h3 id="reputation">Sending reputation</h3>
+          <p>
+            Every agent sends through the same Amazon SES account, and SES reviews or suspends accounts whose mail bounces or draws spam complaints. To protect everyone's
+            delivery, AGMX pauses an agent's <em>sending</em> when at least 5 of its sends hard-bounce at a rate of 5% or more, or at least 2 draw complaints at 0.1% or
+            more (measured over 30 days). Receiving keeps working and scheduled mail waits. You get an email and an <code>agent.sending_paused</code> webhook. Fix the cause,
+            then resume from the agent page or with an account key. Resuming starts a fresh window.
+          </p>
+          <Endpoint method="GET" path="/api/v1/agents/{agentId}/reputation" />
+          <Endpoint method="POST" path="/api/v1/agents/{agentId}/sending/pause" />
+          <Endpoint method="POST" path="/api/v1/agents/{agentId}/sending/resume" />
+
+          {/* ------------------------------------------------------------- */}
+          <H2 id="your-data">
+            Export & deletion
+          </H2>
+          <p>
+            Download everything stored for your account as one JSON file — profile, agents, inboxes, rules, domains, API key names, threads, messages,
+            attachment metadata and usage. Secrets, key hashes and attachment bytes are left out. Works with a dashboard session or an account key, not
+            an agent key.
+          </p>
+          <Endpoint method="GET" path="/api/v1/account/export" />
+          <CodeBlock lang="bash" code={`curl ${api}/account/export -H "Authorization: Bearer $AGMX_ACCOUNT_KEY" -o agmx-export.json`} />
+          <p>
+            Deleting an account removes its agents, inboxes, mail, attachments, keys and custom domains immediately. It needs a signed-in human:
+            use <strong>Settings → Your data</strong>, or call the endpoint from a dashboard session with <code>confirm</code> set to the account email.
+            API keys can't delete accounts.
+          </p>
+          <Endpoint method="DELETE" path="/api/v1/account" />
 
           {/* ------------------------------------------------------------- */}
           <H2 id="self-hosting">
@@ -978,7 +1023,9 @@ const { apiKey, inbox, client } = await Agmx.signup({
               [<code key="v">SES_RECEIPT_RULE_SET / SES_RECEIPT_RULE</code>, "Optional: rule that custom domains get added to automatically."],
               [<code key="v">MAIL_TRANSPORT</code>, "ses or log. Defaults to ses when AWS credentials are present."],
               [<code key="v">SYSTEM_FROM</code>, "From address for sign-in emails, e.g. AGMX <no-reply@agmx.io>."],
-              [<code key="v">ENABLE_AGENT_SIGNUPS</code>, "Set to false to disable POST /signup."]
+              [<code key="v">ENABLE_AGENT_SIGNUPS</code>, "Set to false to disable POST /signup."],
+              [<code key="v">OPERATOR_NAME</code>, "Who runs the instance, named in /terms and /privacy."],
+              [<code key="v">SYSTEM_INBOXES</code>, "Role mailboxes created for the first operator (default abuse,postmaster,privacy). Empty disables."]
             ]}
           />
           <h3>Amazon SES setup</h3>

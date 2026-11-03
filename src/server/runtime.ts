@@ -1,4 +1,5 @@
 import { Layer, ManagedRuntime } from "effect"
+import { AlertLoggerLive, installProcessAlerts } from "./alerts"
 import { Account } from "./services/Account"
 import { Agents } from "./services/Agents"
 import { Db } from "./services/Db"
@@ -8,6 +9,7 @@ import { Inbound } from "./services/Inbound"
 import { Mail, ScheduledSendWorker } from "./services/Mail"
 import { MailTransport } from "./services/MailTransport"
 import { Quota } from "./services/Quota"
+import { Reputation } from "./services/Reputation"
 import { Signups } from "./services/Signups"
 import { Storage } from "./services/Storage"
 import { Webhooks } from "./services/Webhooks"
@@ -16,7 +18,8 @@ const Infra = Layer.mergeAll(Db.layer, MailTransport.layer, Events.layer, Storag
 const QuotaLive = Quota.layer.pipe(Layer.provide(Infra))
 const AgentsLive = Agents.layer.pipe(Layer.provide([Infra, QuotaLive]))
 const WebhooksLive = Webhooks.layer.pipe(Layer.provide([Infra, AgentsLive]))
-const MailLive = Mail.layer.pipe(Layer.provide([Infra, QuotaLive, AgentsLive, WebhooksLive]))
+const ReputationLive = Reputation.layer.pipe(Layer.provide([Infra, WebhooksLive]))
+const MailLive = Mail.layer.pipe(Layer.provide([Infra, QuotaLive, AgentsLive, WebhooksLive, ReputationLive]))
 
 /** Every domain service, fully wired. Shared by the HTTP API, MCP and server functions. */
 export const ServicesLive = Layer.mergeAll(
@@ -24,6 +27,7 @@ export const ServicesLive = Layer.mergeAll(
   QuotaLive,
   AgentsLive,
   WebhooksLive,
+  ReputationLive,
   MailLive,
   Inbound.layer.pipe(Layer.provide([Infra, MailLive])),
   Domains.layer.pipe(Layer.provide([Infra, QuotaLive])),
@@ -32,9 +36,12 @@ export const ServicesLive = Layer.mergeAll(
 )
 
 /** Background fibers: webhook delivery and housekeeping. */
-const WorkersLive = Layer.mergeAll(Webhooks.worker, Account.maintenance, ScheduledSendWorker).pipe(Layer.provide(ServicesLive))
+const WorkersLive = Layer.mergeAll(Webhooks.worker, Account.maintenance, ScheduledSendWorker).pipe(Layer.provide([ServicesLive, AlertLoggerLive]))
 
-export const AppLayer = Layer.mergeAll(ServicesLive, WorkersLive)
+/** Error logs anywhere in the app (API, MCP, workers) also raise operator alerts. */
+export const AppLayer = Layer.mergeAll(ServicesLive, WorkersLive, AlertLoggerLive)
+
+installProcessAlerts()
 
 type Globals = { __agmxMemoMap?: Layer.MemoMap; __agmxRuntime?: ManagedRuntime.ManagedRuntime<Layer.Success<typeof AppLayer>, never> }
 const globals = globalThis as unknown as Globals

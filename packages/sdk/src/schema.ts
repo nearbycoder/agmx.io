@@ -61,6 +61,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export account data
+         * @description Downloads everything stored for the account as one JSON file: profile, agents, inboxes, rules, domains, API key metadata, threads, messages, attachment metadata and usage. Secrets, key hashes and attachment bytes are not included. Dashboard sessions and account keys only.
+         */
+        get: operations["account.exportData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete account
+         * @description Permanently deletes the account and all of its agents, inboxes, mail, attachments, keys and custom domains. Requires a signed-in dashboard session and `confirm` set to the account email. This cannot be undone.
+         */
+        delete: operations["account.deleteAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -155,6 +195,66 @@ export interface paths {
         get: operations["agents.webhookDeliveries"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/reputation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sending reputation
+         * @description Bounces and spam complaints for mail this agent sent. AGMX pauses an agent's sending automatically when it reaches 5+ hard bounces at a 5%+ rate, or 2+ complaints at a 0.1%+ rate.
+         */
+        get: operations["agents.reputation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/sending/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause sending
+         * @description Stops all outgoing mail from the agent's inboxes. Receiving continues. Scheduled mail waits.
+         */
+        post: operations["agents.pauseSending"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agentId}/sending/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume sending
+         * @description Humans and account keys only. Starts a fresh reputation window, so fix the cause of the bounces or complaints first.
+         */
+        post: operations["agents.resumeSending"];
         delete?: never;
         options?: never;
         head?: never;
@@ -978,6 +1078,99 @@ export interface operations {
             };
         };
     };
+    "account.exportData": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnauthorizedEncoded"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenEncoded"];
+                };
+            };
+        };
+    };
+    "account.deleteAccount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    confirm: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnauthorizedEncoded"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenEncoded"];
+                };
+            };
+            /** @description InvalidRequest */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvalidRequestEncoded"];
+                };
+            };
+        };
+    };
     "agents.list": {
         parameters: {
             query?: never;
@@ -1006,6 +1199,14 @@ export interface operations {
                          */
                         sendPolicy: "auto" | "first_contact" | "all";
                         approveAttachments: boolean;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         inboxes: {
                             id: string;
                             agentId: string;
@@ -1093,6 +1294,14 @@ export interface operations {
                              */
                             sendPolicy: "auto" | "first_contact" | "all";
                             approveAttachments: boolean;
+                            sendingPaused: {
+                                /**
+                                 * Format: date-time
+                                 * @description ISO-8601 timestamp
+                                 */
+                                at: string;
+                                reason: string | null;
+                            } | null;
                             inboxes: {
                                 id: string;
                                 agentId: string;
@@ -1205,6 +1414,14 @@ export interface operations {
                          */
                         sendPolicy: "auto" | "first_contact" | "all";
                         approveAttachments: boolean;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         inboxes: {
                             id: string;
                             agentId: string;
@@ -1352,6 +1569,14 @@ export interface operations {
                          */
                         sendPolicy: "auto" | "first_contact" | "all";
                         approveAttachments: boolean;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         inboxes: {
                             id: string;
                             agentId: string;
@@ -1453,6 +1678,14 @@ export interface operations {
                          */
                         sendPolicy: "auto" | "first_contact" | "all";
                         approveAttachments: boolean;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         inboxes: {
                             id: string;
                             agentId: string;
@@ -1611,6 +1844,219 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnauthorizedEncoded"];
+                };
+            };
+            /** @description NotFound */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundEncoded"];
+                };
+            };
+        };
+    };
+    "agents.reputation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sending reputation for one agent: mail sent through SES and how much of it bounced or drew spam complaints. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: date-time
+                         * @description ISO-8601 timestamp
+                         */
+                        since: string;
+                        sent: number;
+                        bounced: number;
+                        complained: number;
+                        bounceRate: number;
+                        complaintRate: number;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
+                        thresholds: {
+                            windowDays: number;
+                            minBounces: number;
+                            bounceRate: number;
+                            minComplaints: number;
+                            complaintRate: number;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnauthorizedEncoded"];
+                };
+            };
+            /** @description NotFound */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundEncoded"];
+                };
+            };
+        };
+    };
+    "agents.pauseSending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Sending reputation for one agent: mail sent through SES and how much of it bounced or drew spam complaints. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: date-time
+                         * @description ISO-8601 timestamp
+                         */
+                        since: string;
+                        sent: number;
+                        bounced: number;
+                        complained: number;
+                        bounceRate: number;
+                        complaintRate: number;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
+                        thresholds: {
+                            windowDays: number;
+                            minBounces: number;
+                            bounceRate: number;
+                            minComplaints: number;
+                            complaintRate: number;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnauthorizedEncoded"];
+                };
+            };
+            /** @description NotFound */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundEncoded"];
+                };
+            };
+        };
+    };
+    "agents.resumeSending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sending reputation for one agent: mail sent through SES and how much of it bounced or drew spam complaints. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: date-time
+                         * @description ISO-8601 timestamp
+                         */
+                        since: string;
+                        sent: number;
+                        bounced: number;
+                        complained: number;
+                        bounceRate: number;
+                        complaintRate: number;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
+                        thresholds: {
+                            windowDays: number;
+                            minBounces: number;
+                            bounceRate: number;
+                            minComplaints: number;
+                            complaintRate: number;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnauthorizedEncoded"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenEncoded"];
                 };
             };
             /** @description NotFound */
@@ -2032,6 +2478,8 @@ export interface operations {
                                 score: number;
                                 reasons: string[];
                                 hiddenContent: boolean;
+                                /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                                sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
                             labels: string[];
@@ -2160,6 +2608,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -2357,6 +2807,8 @@ export interface operations {
                                 score: number;
                                 reasons: string[];
                                 hiddenContent: boolean;
+                                /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                                sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
                             labels: string[];
@@ -2508,6 +2960,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -2707,6 +3161,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -2819,6 +3275,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -2990,6 +3448,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -3192,6 +3652,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -3504,6 +3966,8 @@ export interface operations {
                                 score: number;
                                 reasons: string[];
                                 hiddenContent: boolean;
+                                /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                                sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
                             labels: string[];
@@ -3655,6 +4119,8 @@ export interface operations {
                                 score: number;
                                 reasons: string[];
                                 hiddenContent: boolean;
+                                /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                                sender?: ("verified" | "failed" | "unknown") | null;
                             } | null;
                             sendAt: string | null;
                             labels: string[];
@@ -3778,6 +4244,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -4041,6 +4509,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -4239,6 +4709,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -4429,6 +4901,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -4576,6 +5050,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -4774,6 +5250,8 @@ export interface operations {
                             score: number;
                             reasons: string[];
                             hiddenContent: boolean;
+                            /** @description Is the From address authentic? `verified` = DMARC pass (or sent from another AGMX inbox); `failed` = authentication failed, the sender may be forged (codes and sign-in links are withheld); `unknown` = the sending domain publishes no policy. */
+                            sender?: ("verified" | "failed" | "unknown") | null;
                         } | null;
                         sendAt: string | null;
                         labels: string[];
@@ -5740,6 +6218,14 @@ export interface operations {
                              */
                             sendPolicy: "auto" | "first_contact" | "all";
                             approveAttachments: boolean;
+                            sendingPaused: {
+                                /**
+                                 * Format: date-time
+                                 * @description ISO-8601 timestamp
+                                 */
+                                at: string;
+                                reason: string | null;
+                            } | null;
                             inboxes: {
                                 id: string;
                                 agentId: string;
@@ -5980,6 +6466,14 @@ export interface operations {
                          */
                         sendPolicy: "auto" | "first_contact" | "all";
                         approveAttachments: boolean;
+                        sendingPaused: {
+                            /**
+                             * Format: date-time
+                             * @description ISO-8601 timestamp
+                             */
+                            at: string;
+                            reason: string | null;
+                        } | null;
                         inboxes: {
                             id: string;
                             agentId: string;
