@@ -9,7 +9,7 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { chromium } from "playwright-core"
-import { BRAND, markSvg, scaledGlyph } from "../src/brand/mark"
+import { BRAND, markMarkup, markSvg } from "../src/brand/mark"
 
 const out = join(import.meta.dirname, "..", "public")
 mkdirSync(join(out, "og"), { recursive: true })
@@ -43,15 +43,16 @@ const ico = (images: Array<{ size: number; png: Buffer }>) => {
   return Buffer.concat([header, ...images.map((i) => i.png)])
 }
 
-// Favicons use the glyph at full size for 16px legibility; larger icons get breathing room.
-const tile = markSvg({ shape: "tile" })
-const roomy = markSvg({ shape: "tile", scale: 0.88 })
+// Favicons: simplified lighting, glyph at full size for 16px legibility.
+// Everything larger: the full dimensional mark with breathing room.
+const tile = markSvg({ shape: "tile", scale: 1, detail: "simple" })
+const roomy = markSvg({ shape: "tile", scale: 0.88, detail: "full" })
 writeFileSync(join(out, "favicon.svg"), tile + "\n")
 writeFileSync(join(out, "favicon.ico"), ico(await Promise.all([16, 32, 48].map(async (size) => ({ size, png: await renderSvg(tile, size) })))))
-writeFileSync(join(out, "apple-touch-icon.png"), await renderSvg(markSvg({ shape: "bleed", scale: 0.74 }), 180))
+writeFileSync(join(out, "apple-touch-icon.png"), await renderSvg(markSvg({ shape: "bleed", scale: 0.74, detail: "full" }), 180))
 writeFileSync(join(out, "icon-192.png"), await renderSvg(roomy, 192))
 writeFileSync(join(out, "icon-512.png"), await renderSvg(roomy, 512))
-writeFileSync(join(out, "icon-maskable-512.png"), await renderSvg(markSvg({ shape: "bleed", scale: 0.6 }), 512))
+writeFileSync(join(out, "icon-maskable-512.png"), await renderSvg(markSvg({ shape: "bleed", scale: 0.6, detail: "full" }), 512))
 writeFileSync(join(out, "email-logo.png"), await renderSvg(roomy, 96))
 console.log("✓ icons")
 
@@ -60,7 +61,7 @@ console.log("✓ icons")
 // ---------------------------------------------------------------------------
 
 const mark = (size: number) =>
-  `<svg width="${size}" height="${size}" viewBox="0 0 16 16"><rect width="16" height="16" rx="3.75" fill="${BRAND.lime}"/>${scaledGlyph(0.88)}</svg>`
+  `<svg width="${size}" height="${size}" viewBox="0 0 16 16">${markMarkup({ id: "og", scale: 0.88 })}</svg>`
 
 const card = (opts: { title: string; subtitle: string; visual: string }) => `<!doctype html><html><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet">

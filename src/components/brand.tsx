@@ -1,18 +1,21 @@
-import { BRAND, scaledGlyph } from "~/brand/mark"
+import { useId } from "react"
+import { markMarkup } from "~/brand/mark"
 import { cn, initials } from "~/lib/utils"
 
-export const LogoMark = ({ className, title }: { className?: string; title?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    className={cn("size-7 shrink-0", className)}
-    role={title ? "img" : undefined}
-    aria-hidden={title ? undefined : true}
-    aria-label={title}
-    dangerouslySetInnerHTML={{
-      __html: `<rect width="16" height="16" rx="3.75" fill="${BRAND.lime}"/>${scaledGlyph(0.9)}`
-    }}
-  />
-)
+export const LogoMark = ({ className, title }: { className?: string; title?: string }) => {
+  // Gradient ids must be unique when several logos render on one page.
+  const id = `agmx${useId().replace(/[^a-zA-Z0-9]/g, "")}`
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cn("size-7 shrink-0", className)}
+      role={title ? "img" : undefined}
+      aria-hidden={title ? undefined : true}
+      aria-label={title}
+      dangerouslySetInnerHTML={{ __html: markMarkup({ id, scale: 0.9 }) }}
+    />
+  )
+}
 
 export const Logo = ({ className, mark = true }: { className?: string; mark?: boolean }) => (
   <span className={cn("inline-flex items-center gap-2", className)}>
