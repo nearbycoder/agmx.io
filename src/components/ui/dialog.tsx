@@ -6,25 +6,31 @@ import { cn } from "~/lib/utils"
 import { Button } from "./button"
 
 export const Dialog = DialogPrimitive.Root
-export const DialogTrigger = DialogPrimitive.Trigger
-export const DialogClose = DialogPrimitive.Close
 
 export const DialogContent = ({
   title,
   description,
   children,
   className,
-  footer
+  footer,
+  dismissible = true
 }: {
   title: ReactNode
   description?: ReactNode
   children?: ReactNode
   className?: string
   footer?: ReactNode
+  /**
+   * False while the dialog shows something that can't be shown again (a new API key):
+   * a stray click outside or Esc no longer closes it. The buttons still do.
+   */
+  dismissible?: boolean
 }) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-fade-in" />
     <DialogPrimitive.Content
+      onInteractOutside={dismissible ? undefined : (e) => e.preventDefault()}
+      onEscapeKeyDown={dismissible ? undefined : (e) => e.preventDefault()}
       onOpenAutoFocus={(e) => {
         // Keep a field's autoFocus; otherwise focus the dialog itself rather than its close button.
         const root = e.currentTarget as HTMLElement

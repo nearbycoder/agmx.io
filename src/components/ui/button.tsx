@@ -1,3 +1,4 @@
+import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { forwardRef, type ButtonHTMLAttributes } from "react"
 import { cn } from "~/lib/utils"
@@ -31,12 +32,23 @@ export const buttonVariants = cva(
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   loading?: boolean
+  /**
+   * Style the single child (a `Link` or `<a>`) as the button instead of rendering one.
+   * A button inside a link is two tab stops for one action, and isn't valid HTML.
+   */
+  asChild?: boolean
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, loading, children, disabled, ...props }, ref) => (
-  <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} disabled={disabled || loading} {...props}>
-    {loading ? <Spinner className="size-4" /> : null}
-    {children}
-  </button>
-))
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, loading, children, disabled, asChild, ...props }, ref) =>
+  asChild ? (
+    <Slot ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props}>
+      {children}
+    </Slot>
+  ) : (
+    <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} disabled={disabled || loading} {...props}>
+      {loading ? <Spinner className="size-4" /> : null}
+      {children}
+    </button>
+  )
+)
 Button.displayName = "Button"

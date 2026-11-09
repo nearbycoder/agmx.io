@@ -1,5 +1,4 @@
 import * as SwitchPrimitive from "@radix-ui/react-switch"
-import * as TabsPrimitive from "@radix-ui/react-tabs"
 import { Check, Copy } from "lucide-react"
 import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
@@ -29,20 +28,6 @@ export const Switch = ({
     <SwitchPrimitive.Thumb className="block size-4 translate-x-0.5 rounded-full bg-surface shadow-card transition-transform data-[state=checked]:translate-x-[17px] dark:data-[state=checked]:bg-ink" />
   </SwitchPrimitive.Root>
 )
-
-export const Tabs = TabsPrimitive.Root
-export const TabsList = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <TabsPrimitive.List className={cn("inline-flex items-center gap-1 rounded-xl border border-line bg-bg-subtle p-1", className)}>{children}</TabsPrimitive.List>
-)
-export const TabsTrigger = ({ value, children }: { value: string; children: ReactNode }) => (
-  <TabsPrimitive.Trigger
-    value={value}
-    className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-muted transition-colors hover:text-ink data-[state=active]:bg-surface data-[state=active]:text-ink data-[state=active]:shadow-card"
-  >
-    {children}
-  </TabsPrimitive.Trigger>
-)
-export const TabsContent = TabsPrimitive.Content
 
 export const Kbd = ({ children, className }: { children: ReactNode; className?: string }) => (
   <kbd className={cn("inline-flex h-5 min-w-5 items-center justify-center rounded-md border border-line bg-surface px-1 font-mono text-[11px] text-muted shadow-card", className)}>

@@ -339,7 +339,12 @@ export const SendMessagePayload = Schema.Struct({
   text: Schema.optional(Schema.String),
   html: Schema.optional(Schema.String),
   attachments: Schema.optional(Schema.Array(OutgoingAttachment)),
-  headers: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  headers: Schema.optional(
+    Schema.Record(Schema.String, Schema.String).annotate({
+      description:
+        "Up to 20 extra headers, such as `List-Unsubscribe` or your own `X-` headers. Headers AGMX writes itself (From, To, Cc, Bcc, Sender, Reply-To, Subject, Date, Message-ID, threading and MIME headers) can't be set here: use the matching fields instead."
+    })
+  ),
   labels: Schema.optional(Schema.Array(Schema.String)),
   /** ISO timestamp to send later (up to 30 days ahead). */
   sendAt: Schema.optional(Schema.String),
@@ -621,6 +626,10 @@ export const SystemStatus = Schema.Struct({
   awsRegion: Schema.String,
   sesConfigured: Schema.Boolean,
   inboundWebhookUrl: Schema.String,
+  /** How many SNS topics the inbound webhook accepts. Zero in production means inbound mail is refused. */
+  inboundTopics: Schema.Finite,
+  /** Whether the server runs in production mode, where the topic list is enforced. */
+  production: Schema.Boolean,
   allowedEmails: Schema.Array(Schema.String),
   sesAccount: Schema.NullOr(
     Schema.Struct({
@@ -628,7 +637,9 @@ export const SystemStatus = Schema.Struct({
       sendingEnabled: Schema.Boolean,
       max24HourSend: Schema.Finite,
       sentLast24Hours: Schema.Finite,
-      maxSendRate: Schema.Finite
+      maxSendRate: Schema.Finite,
+      reviewStatus: Schema.NullOr(Schema.Literals(["PENDING", "GRANTED", "DENIED", "FAILED"])),
+      reviewCaseId: Schema.NullOr(Schema.String)
     })
   ),
   sesError: Schema.NullOr(Schema.String)

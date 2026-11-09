@@ -29,9 +29,14 @@ export type WebhookEvent =
 
 const MAX_ATTEMPTS = 8
 
-const isPrivateAddress = (ip: string) =>
-  /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(ip) ||
-  /^(::1?|f[cd][0-9a-f]{2}:|fe80:|::ffff:(10\.|127\.|169\.254\.|192\.168\.))/i.test(ip)
+export const isPrivateAddress = (address: string) => {
+  // IPv4 written inside IPv6 (::ffff:10.0.0.1) is judged as the IPv4 address it is.
+  const ip = address.replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, "")
+  return (
+    /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|22[4-9]\.|2[3-5]\d\.)/.test(ip) ||
+    /^(::1?$|f[cd][0-9a-f]{2}:|fe[89ab][0-9a-f]:|ff[0-9a-f]{2}:|::ffff:)/i.test(ip)
+  )
+}
 
 /** Blocks webhook delivery to loopback, private and link-local (cloud metadata) addresses in production. */
 const assertPublicTarget = async (url: string) => {

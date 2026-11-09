@@ -99,7 +99,7 @@ Configuration comes from your shell or a `.env` file next to `docker-compose.yml
 |---|---|---|
 | `ADMIN_EMAILS` | required | Operators: admin role and the Unlimited plan |
 | `ALLOWED_EMAILS` | same as `ADMIN_EMAILS` | Set to `*` to open sign-ups |
-| `BETTER_AUTH_SECRET` | placeholder | Set a real one (`openssl rand -base64 48`) anywhere beyond your laptop |
+| `BETTER_AUTH_SECRET` | placeholder | Required in production (the server won't start without it). Generate one with `openssl rand -base64 48` |
 | `APP_URL` | `http://localhost:3000` | Public URL, used in links and auth |
 | `MAIL_DOMAIN` | `agmx.localhost` | Domain agent inboxes live on |
 | `ENABLE_DEV_INBOUND` | `true` | The test-mail endpoint is unauthenticated. Set it to `false` before exposing the instance |
@@ -146,7 +146,7 @@ Pick a region that supports **email receiving** (e.g. `us-east-1`, `us-west-2`, 
 
 1. **Verify your mail domain.** In *SES → Identities → Create identity → Domain*, enter `MAIL_DOMAIN` and enable Easy DKIM. Publish the three DKIM `CNAME` records it shows.
 2. **Route inbound mail to SES.** Publish `MX 10 inbound-smtp.<region>.amazonaws.com` on `MAIL_DOMAIN`.
-3. **Create an SNS topic** (e.g. `agmx-inbound`). Add an **HTTPS subscription** to `https://<your-host>/api/inbound/ses`. AGMX verifies the signature and confirms the subscription automatically.
+3. **Create an SNS topic** (e.g. `agmx-inbound`). Set `SES_INBOUND_TOPIC_ARNS` to its ARN (comma-separate several) and restart, then add an **HTTPS subscription** to `https://<your-host>/api/inbound/ses`. AGMX verifies the signature and confirms the subscription automatically. In production it refuses any topic that isn't on that list.
 4. **Receipt rule.** In *SES → Email receiving → Rule sets*, create and **activate** a rule set. Add a rule for your domain with an **SNS action** targeting the topic, encoding **Base64**. SNS can carry up to 150 KB of mail per message. For larger mail, use an **S3 action** with that SNS topic as its notification. AGMX then fetches the object, which needs `s3:GetObject` on the bucket.
 5. **Delivery feedback (recommended).** Create a configuration set with an event destination for *Bounce, Complaint, Delivery* that publishes to an SNS topic subscribed to the same URL. Set `SES_CONFIGURATION_SET`.
 6. **Attachment bucket (recommended).** Create a private bucket and set `ATTACHMENT_STORAGE=s3` and `STORAGE_BUCKET`. For Cloudflare R2, also set `STORAGE_ENDPOINT` and R2 keys in `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY`.

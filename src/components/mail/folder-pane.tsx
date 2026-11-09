@@ -47,7 +47,7 @@ export function FolderPane({ folder, inbox, agents }: { folder: FolderId; inbox?
             <Link
               key={f.id}
               to="/app/mail"
-              search={(prev) => ({ inbox: prev.inbox, folder: f.id === "inbox" ? undefined : f.id })}
+              search={(prev) => ({ inbox: prev.inbox, q: prev.q, folder: f.id === "inbox" ? undefined : f.id })}
               className={rowClass(active)}
             >
               <f.icon className={cn("size-4", active ? "text-ink" : "text-muted group-hover:text-ink-2")} />
@@ -62,7 +62,7 @@ export function FolderPane({ folder, inbox, agents }: { folder: FolderId; inbox?
 
       <div className="mt-6 mb-1.5 px-2.5 text-[11px] font-medium tracking-[0.08em] text-faint uppercase">Inboxes</div>
       <div className="flex flex-col gap-px">
-        <Link to="/app/mail" search={(prev) => ({ folder: prev.folder })} className={rowClass(!inbox)}>
+        <Link to="/app/mail" search={(prev) => ({ folder: prev.folder, q: prev.q })} className={rowClass(!inbox)}>
           <span className="flex size-5 items-center justify-center rounded-[28%] bg-bg-subtle text-muted ring-1 ring-line">
             <Layers className="size-3" />
           </span>
@@ -72,7 +72,7 @@ export function FolderPane({ folder, inbox, agents }: { folder: FolderId; inbox?
         {inboxes.map((i) => {
           const active = inbox === i.id
           return (
-            <Link key={i.id} to="/app/mail" search={(prev) => ({ folder: prev.folder, inbox: i.id })} title={i.address} className={rowClass(active)}>
+            <Link key={i.id} to="/app/mail" search={(prev) => ({ folder: prev.folder, q: prev.q, inbox: i.id })} title={i.address} className={rowClass(active)}>
               <AgentAvatar name={i.agent.name} color={i.agent.color} size="xs" />
               <span className="min-w-0 flex-1 truncate">
                 {i.localPart}

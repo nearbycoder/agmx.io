@@ -89,14 +89,14 @@ export function MarketingHeader() {
             <GithubIcon />
           </a>
           <ThemeToggle className="hidden sm:inline-flex" />
-          <Link to="/login" className="hidden sm:block">
-            <Button variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+            <Link to="/login">
               Sign in
-            </Button>
-          </Link>
-          <Link to="/login" className="ml-1">
-            <Button size="sm">Get started</Button>
-          </Link>
+            </Link>
+          </Button>
+          <Button asChild size="sm" className="ml-1">
+            <Link to="/login">Get started</Link>
+          </Button>
           <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
             <DialogPrimitive.Trigger asChild>
               <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Open menu">
@@ -132,14 +132,14 @@ export function MarketingHeader() {
                 </nav>
                 <div className="mt-3 flex items-center gap-2 border-t border-line pt-4">
                   <ThemeToggle />
-                  <Link to="/login" className="flex-1" onClick={() => setOpen(false)}>
-                    <Button variant="secondary" className="w-full">
+                  <Button asChild variant="secondary" className="flex-1">
+                    <Link to="/login" onClick={() => setOpen(false)}>
                       Sign in
-                    </Button>
-                  </Link>
-                  <Link to="/login" className="flex-1" onClick={() => setOpen(false)}>
-                    <Button className="w-full">Get started</Button>
-                  </Link>
+                    </Link>
+                  </Button>
+                  <Button asChild className="flex-1">
+                    <Link to="/login" onClick={() => setOpen(false)}>Get started</Link>
+                  </Button>
                 </div>
               </DialogPrimitive.Content>
             </DialogPrimitive.Portal>

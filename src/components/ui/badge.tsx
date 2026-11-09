@@ -20,17 +20,3 @@ const badgeVariants = cva("inline-flex items-center gap-1 rounded-full px-2 py-0
 export const Badge = ({ className, tone, ...props }: HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badgeVariants>) => (
   <span className={cn(badgeVariants({ tone }), className)} {...props} />
 )
-
-export const StatusDot = ({ tone = "ok", pulse }: { tone?: "ok" | "warn" | "danger" | "muted" | "accent"; pulse?: boolean }) => (
-  <span
-    className={cn(
-      "inline-block size-2 rounded-full",
-      tone === "ok" && "bg-ok",
-      tone === "warn" && "bg-warn",
-      tone === "danger" && "bg-danger",
-      tone === "muted" && "bg-faint",
-      tone === "accent" && "bg-accent",
-      pulse && "animate-pulse-dot"
-    )}
-  />
-)

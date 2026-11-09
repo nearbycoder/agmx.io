@@ -1,5 +1,5 @@
 import { Cause, Context, Effect, Exit, Layer } from "effect"
-import { db, type DbOrTx } from "../db/client"
+import { db, type DbOrTx, type Transaction } from "../db/client"
 
 /** The transaction (if any) that the current fiber is running inside. */
 export const CurrentTx = Context.Reference<DbOrTx | null>("agmx/db/CurrentTx", { defaultValue: () => null })
@@ -41,7 +41,10 @@ export class Db extends Context.Service<Db, {
     useUnique: <A>(f: (db: DbOrTx) => Promise<A>) =>
       Effect.gen(function* () {
         const tx = yield* CurrentTx
-        return yield* Effect.tryPromise({ try: () => f(tx ?? db), catch: (cause) => cause }).pipe(
+        // Inside a transaction a failed statement aborts the whole transaction, so run it in a
+        // savepoint: the violation rolls back to there and the outer transaction carries on.
+        const run = tx && tx !== db ? () => (tx as Transaction).transaction((savepoint) => f(savepoint)) : () => f(db)
+        return yield* Effect.tryPromise({ try: run, catch: (cause) => cause }).pipe(
           Effect.catch((cause) => (isUniqueViolation(cause) ? Effect.succeed(null) : Effect.die(cause)))
         )
       }),

@@ -68,11 +68,19 @@ const splitRecipients = (value: string | undefined) =>
 /** Floating composer (Gmail-style). Opened from anywhere through `useCompose()`. */
 export const ComposeWindow = () => {
   const { draft, close } = useCompose()
+  const session = useRef(0)
+  const last = useRef<ComposeDraft | null>(null)
   if (!draft) return null
-  return <ComposePanel key={JSON.stringify(draft)} draft={draft} onClose={close} />
+  // A new panel (fresh state and idempotency key) for each message opened.
+  if (last.current !== draft) {
+    last.current = draft
+    session.current += 1
+  }
+  return <ComposePanel key={session.current} draft={draft} onClose={close} />
 }
 
 function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => void }) {
+  const { queued, nudge, cancelQueued, setDirty } = useCompose()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const currentInbox = useRouterState({ select: (s) => (s.location.search as { inbox?: string }).inbox })
@@ -140,6 +148,33 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
         bcc.join() !== splitRecipients(draft.bcc).join()))
   const totalBytes = files.reduce((s, f) => s + f.size, 0)
   const fromInbox = inboxes.find((i) => i.address === from)
+
+  // Tell the provider about unsaved work, so opening another message asks before replacing this one.
+  useEffect(() => {
+    setDirty(dirty)
+    return () => setDirty(false)
+  }, [dirty, setDirty])
+
+  // Reloading or closing the tab would lose the message too.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", warn)
+    return () => window.removeEventListener("beforeunload", warn)
+  }, [dirty])
+
+  // Come forward when asked to (Compose pressed again, or another message is waiting).
+  const firstNudge = useRef(nudge)
+  useEffect(() => {
+    if (nudge === firstNudge.current) return
+    setMinimized(false)
+    if (queued) setConfirmDiscard(true)
+    else bodyRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nudge])
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["messages"] })
@@ -229,9 +264,12 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
     },
     onError: (e) => {
       setConfirmDiscard(false)
+      cancelQueued()
       setError(e instanceof Error ? e.message : "Couldn't save the draft.")
     }
   })
+
+  const busy = send.isPending || saveDraft.isPending
 
   const validate = () => {
     setError(null)
@@ -247,19 +285,31 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   }
 
   const submit = (sendAt?: Date) => {
-    if (send.isPending || !validate()) return
+    if (busy || !validate()) return
+    if (sendAt && Number.isNaN(sendAt.getTime())) return setError("Pick a date and time to send at.")
     if (sendAt && sendAt.getTime() <= Date.now() + 30_000) return setError("Pick a time in the future.")
     setPicking(false)
     send.mutate(sendAt?.toISOString())
   }
 
-  const busy = send.isPending || saveDraft.isPending
-  const requestClose = () => (dirty && !busy ? setConfirmDiscard(true) : onClose())
+  // While a send or save is in flight the composer stays put: closing it now would hide a failure
+  // and throw the message away.
+  const requestClose = () => {
+    if (busy) return
+    if (dirty) setConfirmDiscard(true)
+    else onClose()
+  }
+  const dismissConfirm = (open: boolean) => {
+    setConfirmDiscard(open)
+    // "Keep editing" also means: forget the message that was waiting to replace this one.
+    if (!open) cancelQueued()
+  }
 
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault()
-      submit()
+      // With the date picker open, the shortcut schedules: it must never send right away instead.
+      submit(picking ? new Date(customAt) : undefined)
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && canSaveDraft) {
       e.preventDefault()
       if (!busy) saveDraft.mutate()
@@ -358,6 +408,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                   <div className="relative flex min-w-0 flex-1 items-center gap-2">
                     {fromInbox ? <AgentAvatar name={fromInbox.agent.name} color={fromInbox.agent.color} size="xs" /> : null}
                     <select
+                      aria-label="From"
                       value={from}
                       onChange={(e) => setFrom(e.target.value)}
                       className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent py-2 pr-6 text-[13.5px] outline-none"
@@ -403,16 +454,16 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                       ) : null
                     }
                   >
-                    <RecipientInput inputRef={toRef} values={to} onChange={setTo} placeholder="name@example.com" />
+                    <RecipientInput label="To" inputRef={toRef} values={to} onChange={setTo} placeholder="name@example.com" />
                   </Row>
                   {showCc ? (
                     <Row label="Cc">
-                      <RecipientInput values={cc} onChange={setCc} autoFocus />
+                      <RecipientInput label="Cc" values={cc} onChange={setCc} autoFocus />
                     </Row>
                   ) : null}
                   {showBcc ? (
                     <Row label="Bcc">
-                      <RecipientInput values={bcc} onChange={setBcc} autoFocus />
+                      <RecipientInput label="Bcc" values={bcc} onChange={setBcc} autoFocus />
                     </Row>
                   ) : null}
                 </>
@@ -420,6 +471,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
               {mode === "new" ? (
                 <Row label="Subject">
                   <input
+                    aria-label="Subject"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                     placeholder="What's this about?"
@@ -436,6 +488,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
             <div className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto">
               <textarea
                 ref={bodyRef}
+                aria-label={mode === "forward" ? "Note" : "Message"}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 placeholder={mode === "forward" ? "Add a note (optional)…" : "Write your message…"}
@@ -486,7 +539,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
             </div>
 
             {error ? (
-              <div className="mx-3 mb-2 flex items-start gap-2 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-[12.5px] text-danger animate-fade-in">
+              <div role="alert" className="mx-3 mb-2 flex items-start gap-2 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-[12.5px] text-danger animate-fade-in">
                 <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
                 <span className="flex-1">{error}</span>
                 <button onClick={() => setError(null)} aria-label="Dismiss">
@@ -580,7 +633,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
       {canSaveDraft ? (
         <CloseDialog
           open={confirmDiscard}
-          onOpenChange={setConfirmDiscard}
+          onOpenChange={dismissConfirm}
           saving={saveDraft.isPending}
           existing={Boolean(draft.draftId)}
           onSave={() => saveDraft.mutate()}
@@ -592,7 +645,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
       ) : (
         <ConfirmDialog
           open={confirmDiscard}
-          onOpenChange={setConfirmDiscard}
+          onOpenChange={dismissConfirm}
           title="Discard this message?"
           description="Your message hasn't been sent. Discarding it can't be undone."
           confirmLabel="Discard"
@@ -667,12 +720,14 @@ function Row({ label, children, trailing }: { label: string; children: React.Rea
 }
 
 function RecipientInput({
+  label,
   values,
   onChange,
   placeholder,
   autoFocus,
   inputRef
 }: {
+  label: string
   values: Array<string>
   onChange: (v: Array<string>) => void
   placeholder?: string
@@ -708,6 +763,7 @@ function RecipientInput({
       })}
       <input
         ref={inputRef}
+        aria-label={label}
         autoFocus={autoFocus}
         value={text}
         onChange={(e) => {

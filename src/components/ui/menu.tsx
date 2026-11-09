@@ -47,6 +47,36 @@ export const DropdownItem = ({
   </Menu.Item>
 )
 
+/** A row of mutually exclusive choices inside a menu (e.g. the theme switcher). Arrow keys move through them. */
+export const DropdownChoices = <T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+  className
+}: {
+  value: T
+  onChange: (value: T) => void
+  options: ReadonlyArray<{ value: T; label: ReactNode; icon?: ReactNode }>
+  label: string
+  className?: string
+}) => (
+  <Menu.RadioGroup value={value} onValueChange={(v) => onChange(v as T)} aria-label={label} className={className}>
+    {options.map((o) => (
+      <Menu.RadioItem
+        key={o.value}
+        value={o.value}
+        // Keep the menu open so the change is visible where it was made.
+        onSelect={(e) => e.preventDefault()}
+        className="flex cursor-default flex-col items-center gap-1 rounded-lg py-2 text-[11px] text-muted capitalize outline-none transition select-none data-[highlighted]:bg-bg-subtle data-[state=checked]:bg-bg-subtle data-[state=checked]:text-ink data-[state=checked]:ring-1 data-[state=checked]:ring-line [&_svg]:size-4"
+      >
+        {o.icon}
+        {o.label}
+      </Menu.RadioItem>
+    ))}
+  </Menu.RadioGroup>
+)
+
 export const DropdownSeparator = () => <Menu.Separator className="my-1 h-px bg-line" />
 export const DropdownLabel = ({ children }: { children: ReactNode }) => (
   <Menu.Label className="px-2.5 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-faint uppercase">{children}</Menu.Label>

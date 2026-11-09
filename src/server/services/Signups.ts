@@ -135,18 +135,23 @@ export class Signups extends Context.Service<Signups, {
           const inbox = inboxRow ? toInbox(inboxRow) : null
 
           if (row.status === "approved" && row.agentId && row.userId) {
-            // Hand out the key exactly once: flip to completed atomically first.
-            const claimed = yield* db.use((d) =>
-              d
-                .update(agentSignups)
-                .set({ status: "completed" })
-                .where(and(eq(agentSignups.id, row.id), eq(agentSignups.status, "approved")))
-                .returning({ id: agentSignups.id })
+            // Hand out the key exactly once: flip to completed and mint together, so a failed
+            // mint leaves the request approved and the next poll can try again.
+            const { userId, agentId } = row
+            const key = yield* db.transaction(
+              Effect.gen(function* () {
+                const claimed = yield* db.use((d) =>
+                  d
+                    .update(agentSignups)
+                    .set({ status: "completed" })
+                    .where(and(eq(agentSignups.id, row.id), eq(agentSignups.status, "approved")))
+                    .returning({ id: agentSignups.id })
+                )
+                if (claimed.length === 0) return null
+                return (yield* agents.mintKey(userId, agentId, `${row.agentName} (self sign-up)`)).key
+              })
             )
-            if (claimed.length) {
-              const { key } = yield* agents.mintKey(row.userId, row.agentId, `${row.agentName} (self sign-up)`)
-              return { status: "approved", apiKey: key, agent: agentValue, inbox, ...base } as const
-            }
+            if (key) return { status: "approved", apiKey: key, agent: agentValue, inbox, ...base } as const
           }
           return { status: "completed", apiKey: null, agent: agentValue, inbox, ...base } as const
         }),

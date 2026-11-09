@@ -30,13 +30,15 @@ import { Button } from "~/components/ui/button"
 import { ConfirmDialog } from "~/components/ui/dialog"
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { copyText, Skeleton } from "~/components/ui/misc"
+import { QueryError } from "~/components/dashboard/common"
+import { ApiFailure } from "~/lib/api"
 import { useThread } from "~/lib/queries"
 import { cn, formatBytes, fullDate, mailTime, messageDate } from "~/lib/utils"
 import { HtmlFrame, PlainBody } from "./email-body"
 import { ExtractedPanel, hasExtracted } from "./extracted-panel"
 import { formatWhen, useCancelScheduled } from "./queries"
 import { defaultBodyView, SecurityBanner, type BodyView } from "./security-banner"
-import { UNSENT, useMailActions } from "./use-mail-actions"
+import { UNSENT, latestMessage, useMailActions } from "./use-mail-actions"
 
 export type ReplyMode = "reply" | "replyAll" | "forward"
 
@@ -65,7 +67,7 @@ export function ThreadView({
   onArchived: () => void
   onEditDraft: (message: MessageT) => void
 }) {
-  const { data: thread, isLoading, error } = useThread(threadId)
+  const { data: thread, isLoading, error, refetch } = useThread(threadId)
   const actions = useMailActions()
   /** Message ids awaiting delete confirmation: the whole thread, or one message from it. */
   const [confirmDelete, setConfirmDelete] = useState<ReadonlyArray<string> | null>(null)
@@ -74,11 +76,14 @@ export function ThreadView({
   const messages = thread?.messages ?? []
   // Replies and thread-level actions target real mail, not drafts or held messages.
   const sentMessages = messages.filter((m) => !UNSENT.has(m.status))
-  const latest = sentMessages[sentMessages.length - 1] ?? messages[messages.length - 1]
+  const latest = latestMessage(messages)
   const replyable = sentMessages.length > 0
   const latestInbound = [...messages].reverse().find((m) => m.direction === "inbound")
   const ids = messages.map((m) => m.id)
-  const allArchived = messages.length > 0 && messages.filter((m) => m.direction === "inbound").every((m) => m.isArchived)
+  // Archiving is about received mail; a thread of only sent mail is judged on those messages instead.
+  const inbound = messages.filter((m) => m.direction === "inbound")
+  const archivable = inbound.length ? inbound : messages
+  const allArchived = archivable.length > 0 && archivable.every((m) => m.isArchived)
   const anySpam = messages.some((m) => m.isSpam)
   const starred = latest?.isStarred ?? false
 
@@ -102,13 +107,19 @@ export function ThreadView({
   }, [threadId, thread?.messages.length])
 
   if (isLoading) return <ReaderSkeleton onClose={onClose} />
-  if (error || !thread) {
-    return (
+  // A failed background refresh keeps showing the conversation we already have.
+  if (!thread) {
+    const gone = error instanceof ApiFailure && error.tag === "NotFound"
+    return gone || !error ? (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-        <p className="text-sm text-muted">This conversation couldn't be loaded. It may have been deleted.</p>
+        <p className="text-sm text-muted">This conversation no longer exists. It may have been deleted.</p>
         <Button variant="secondary" size="sm" onClick={onClose}>
           Close
         </Button>
+      </div>
+    ) : (
+      <div className="flex h-full items-center justify-center p-6">
+        <QueryError error={error} onRetry={() => void refetch()} what="this conversation" />
       </div>
     )
   }
@@ -219,6 +230,7 @@ export function ThreadView({
                   key={m.id}
                   type="button"
                   onClick={() => setExpanded((s) => new Set([...s, m.id]))}
+                  aria-expanded={false}
                   className="flex h-11 w-full items-center gap-3 border-b border-line text-left transition-colors hover:bg-bg-subtle/50"
                 >
                   <SenderAvatar name={m.from.name} address={m.from.address} className="size-6 text-[9px]" />
@@ -329,7 +341,20 @@ function MessageItem({
         <SenderAvatar name={m.from.name} address={m.from.address} className="mt-0.5" />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-baseline gap-2">
-            <span className="max-w-full shrink-0 truncate text-[14px] font-semibold">{m.from.name || m.from.address}</span>
+            {collapsible ? (
+              // A real button, so the keyboard can collapse a message too (the whole header is a mouse target).
+              <button
+                type="button"
+                onClick={onCollapse}
+                aria-expanded
+                title="Collapse"
+                className="max-w-full shrink-0 truncate rounded text-left text-[14px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ink/30"
+              >
+                {m.from.name || m.from.address}
+              </button>
+            ) : (
+              <span className="max-w-full shrink-0 truncate text-[14px] font-semibold">{m.from.name || m.from.address}</span>
+            )}
             {m.from.name ? <span className="hidden min-w-0 truncate font-mono text-[12px] text-muted sm:inline">{m.from.address}</span> : null}
           </div>
           <div className="mt-0.5 truncate text-[12.5px] text-muted" title={recipients.map((r) => `${r.kind}: ${formatAddr(r.a)}`).join("\n")}>
@@ -465,11 +490,11 @@ function MessageItem({
             icon={<ShieldAlert />}
             tone="warn"
             action={
-              <Link to="/app/approvals">
-                <Button variant="secondary" size="sm">
+              <Button asChild variant="secondary" size="sm">
+                <Link to="/app/approvals">
                   Review
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             }
           >
             {m.heldReason ? `Held for approval: ${m.heldReason.charAt(0).toLowerCase()}${m.heldReason.slice(1)}` : "The agent's send policy is holding this message."} It goes out once a

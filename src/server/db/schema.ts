@@ -242,10 +242,11 @@ export const threads = pgTable(
     participants: jsonb("participants").$type<Array<Address>>().notNull().default([]),
     messageCount: integer("message_count").notNull().default(0),
     unreadCount: integer("unread_count").notNull().default(0),
-    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+    // Millisecond precision, like messages.created_at, so cursors round-trip through JSON exactly.
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
     createdAt: createdAt()
   },
-  (t) => [index("threads_inbox_last_idx").on(t.inboxId, t.lastMessageAt)]
+  (t) => [index("threads_inbox_last_idx").on(t.inboxId, t.lastMessageAt), index("threads_user_last_idx").on(t.userId, t.lastMessageAt)]
 )
 
 export const messages = pgTable(
@@ -286,6 +287,8 @@ export const messages = pgTable(
     safeText: text("safe_text"),
     idempotencyKey: text("idempotency_key"),
     sendAt: timestamp("send_at", { withTimezone: true }),
+    /** When the message last entered `sending`; lets the worker recover sends interrupted by a crash. */
+    sendingAt: timestamp("sending_at", { withTimezone: true }),
     /** Why the agent's send policy held this message for approval (set while pending, kept after a decision). */
     heldReason: text("held_reason"),
     decidedBy: text("decided_by"),
@@ -299,7 +302,13 @@ export const messages = pgTable(
     providerMessageId: text("provider_message_id"),
     error: text("error"),
     sizeBytes: integer("size_bytes").notNull().default(0),
-    createdAt: createdAt()
+    /**
+     * Millisecond precision on purpose: API clients get this back as an ISO string (which
+     * JavaScript truncates to milliseconds) and pass it in as `since` or inside a cursor.
+     * With Postgres' default microseconds, "newer than the message I just read" would
+     * match that same message again.
+     */
+    createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull().defaultNow()
   },
   (t) => [
     index("messages_inbox_created_idx").on(t.inboxId, t.createdAt),

@@ -18,6 +18,9 @@ export interface SesAccountInfo {
   max24HourSend: number
   sentLast24Hours: number
   maxSendRate: number
+  /** Where Amazon's review of the production-access request stands, if one was made. */
+  reviewStatus: "PENDING" | "GRANTED" | "DENIED" | "FAILED" | null
+  reviewCaseId: string | null
 }
 
 export class MailTransport extends Context.Service<MailTransport, {
@@ -39,7 +42,12 @@ export class MailTransport extends Context.Service<MailTransport, {
     const client = new SESv2Client({ region: env.aws.region, credentials })
     const classic = new SESClient({ region: env.aws.region, credentials })
 
-    const call = <A>(label: string, f: () => Promise<A>) =>
+    /**
+     * `safeToRepeat: false` is for calls that aren't idempotent (sending mail): those are only
+     * retried when SES refused the request outright, never after a timeout or dropped
+     * connection, where the message may already have been accepted.
+     */
+    const call = <A>(label: string, f: () => Promise<A>, safeToRepeat = true) =>
       Effect.tryPromise({
         try: f,
         catch: (cause) => new DeliveryFailed({ message: `${label}: ${cause instanceof Error ? cause.message : String(cause)}` })
@@ -47,7 +55,8 @@ export class MailTransport extends Context.Service<MailTransport, {
         Effect.retry({
           schedule: Schedule.exponential("200 millis"),
           times: 2,
-          while: (error) => /throttl|timeout|ECONNRESET|socket|503|500|Rate exceeded/i.test(error.message)
+          while: (error) =>
+            (safeToRepeat ? /throttl|timeout|ECONNRESET|socket|503|500|Rate exceeded/i : /throttl|Rate exceeded|TooManyRequests/i).test(error.message)
         }),
         Effect.withSpan(`ses.${label}`)
       )
@@ -63,7 +72,8 @@ export class MailTransport extends Context.Service<MailTransport, {
               Content: { Raw: { Data: raw } },
               ConfigurationSetName: env.aws.configurationSet
             })
-          )
+          ),
+          false
         ).pipe(Effect.map((result) => ({ providerMessageId: result.MessageId ?? newId("ses") }))),
 
       createDomainIdentity: (domain) =>
@@ -112,7 +122,9 @@ export class MailTransport extends Context.Service<MailTransport, {
             sendingEnabled: result.SendingEnabled ?? false,
             max24HourSend: result.SendQuota?.Max24HourSend ?? 0,
             sentLast24Hours: result.SendQuota?.SentLast24Hours ?? 0,
-            maxSendRate: result.SendQuota?.MaxSendRate ?? 0
+            maxSendRate: result.SendQuota?.MaxSendRate ?? 0,
+            reviewStatus: (result.Details?.ReviewDetails?.Status as SesAccountInfo["reviewStatus"] | undefined) ?? null,
+            reviewCaseId: result.Details?.ReviewDetails?.CaseId ?? null
           }))
         )
     })

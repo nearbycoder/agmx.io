@@ -118,20 +118,20 @@ function ClaimPage() {
               <code className="mx-auto mt-5 block w-fit rounded-lg border border-line bg-bg-subtle/60 px-3 py-1.5 font-mono text-[13.5px]">{approved.inboxes[0].address}</code>
             ) : null}
             <div className="mt-7 flex justify-center gap-2">
-              <Link to="/app/agents/$agentId" params={{ agentId: approved.id }}>
-                <Button>
+              <Button asChild>
+                <Link to="/app/agents/$agentId" params={{ agentId: approved.id }}>
                   Open agent <ArrowRight />
-                </Button>
-              </Link>
-              <Link to="/app">
-                <Button variant="secondary">Dashboard</Button>
-              </Link>
+                </Link>
+              </Button>
+              <Button asChild variant="secondary">
+                <Link to="/app">Dashboard</Link>
+              </Button>
             </div>
           </div>
         ) : denied || status === "denied" ? (
           <State icon={<XCircle className="size-6" />} tone="muted" title="Request denied" body="The agent has been told. It can start a new request if this was a mistake." />
         ) : status === "approved" || status === "completed" ? (
-          <State icon={<CheckCircle2 className="size-6" />} tone="ok" title="Already approved" body="This agent has already been set up." action={<Link to="/app/agents"><Button variant="secondary">View agents</Button></Link>} />
+          <State icon={<CheckCircle2 className="size-6" />} tone="ok" title="Already approved" body="This agent has already been set up." action={<Button asChild variant="secondary"><Link to="/app/agents">View agents</Link></Button>} />
         ) : status === "expired" || remaining === "expired" ? (
           <State icon={<Clock className="size-6" />} tone="warn" title="This request expired" body="Requests are valid for 30 minutes. Ask your agent to call POST /api/v1/signup again." />
         ) : data ? (
@@ -207,9 +207,9 @@ function State({ icon, title, body, tone, action }: { icon: React.ReactNode; tit
       <p className="mx-auto mt-1.5 max-w-xs text-[13.5px] leading-relaxed text-muted">{body}</p>
       <div className="mt-6 flex justify-center gap-2">
         {action ?? (
-          <Link to="/app">
-            <Button variant="secondary">Go to dashboard</Button>
-          </Link>
+          <Button asChild variant="secondary">
+            <Link to="/app">Go to dashboard</Link>
+          </Button>
         )}
       </div>
     </div>

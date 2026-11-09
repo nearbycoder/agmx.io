@@ -37,7 +37,9 @@ function ApprovalsPage() {
   }, [agents])
 
   /** Remove the item from the queue right away; restore it if the request fails. */
-  const optimistic = (id: string) => {
+  const optimistic = async (id: string) => {
+    // A refresh already in flight would put the item straight back.
+    await queryClient.cancelQueries({ queryKey: dk.approvals })
     const previous = queryClient.getQueryData<ReadonlyArray<MessageT>>(dk.approvals)
     queryClient.setQueryData<ReadonlyArray<MessageT>>(dk.approvals, (list) => list?.filter((m) => m.id !== id))
     return { previous }
@@ -100,11 +102,11 @@ function ApprovalsPage() {
             title="Nothing waiting"
             description="Agents with a send policy will queue mail here. Set a policy under an agent's Sending section."
             action={
-              <Link to="/app/agents">
-                <Button variant="secondary" size="sm">
+              <Button asChild variant="secondary" size="sm">
+                <Link to="/app/agents">
                   Go to agents
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             }
           />
         </Panel>
@@ -145,6 +147,8 @@ function ApprovalItem({
   onReject: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  // A send time that passed while the message waited no longer applies: approving sends it now.
+  const sendsLater = m.sendAt !== null && new Date(m.sendAt).getTime() > Date.now()
   const body = (m.safeText ?? m.text ?? m.snippet ?? "").trim()
   const long = body.length > 420 || body.split("\n").length > 8
   const recipients = [
@@ -168,7 +172,8 @@ function ApprovalItem({
               <span title={fullDate(m.createdAt)}>Held {relativeTime(m.createdAt)}</span>
               {m.sendAt ? (
                 <span className="whitespace-nowrap">
-                  <span className="mr-1.5 text-faint">·</span>Scheduled for {formatWhen(m.sendAt)}
+                  <span className="mr-1.5 text-faint">·</span>
+                  {sendsLater ? `Scheduled for ${formatWhen(m.sendAt)}` : `Was due ${formatWhen(m.sendAt)}, sends when approved`}
                 </span>
               ) : null}
             </div>
@@ -179,7 +184,7 @@ function ApprovalItem({
             <X /> Reject
           </Button>
           <Button size="sm" loading={busy} onClick={onApprove}>
-            <Check /> {m.sendAt ? "Approve" : "Approve and send"}
+            <Check /> {sendsLater ? "Approve" : "Approve and send"}
           </Button>
         </div>
       </div>

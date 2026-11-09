@@ -21,8 +21,20 @@ export const toastFailure = (error: unknown, fallback = "Something went wrong") 
 }
 
 /** Inline, low-key notice. Use for state the user should know about on this screen. */
-export const Notice = ({ tone = "neutral", children, className }: { tone?: "neutral" | "warn" | "danger" | "ok"; children: ReactNode; className?: string }) => (
+export const Notice = ({
+  tone = "neutral",
+  children,
+  className,
+  role
+}: {
+  tone?: "neutral" | "warn" | "danger" | "ok"
+  children: ReactNode
+  className?: string
+  /** `alert` for errors that appear after an action, so screen readers announce them. */
+  role?: "alert" | "status"
+}) => (
   <div
+    role={role}
     className={cn(
       "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-[13px] leading-relaxed",
       tone === "neutral" && "border-line bg-bg-subtle/60 text-ink-2",
@@ -83,7 +95,7 @@ export const FailureNote = ({ error, className }: { error: unknown; className?: 
   if (!error) return null
   const quota = error instanceof ApiFailure && error.tag === "QuotaExceeded"
   return (
-    <Notice tone={quota ? "warn" : "danger"} className={cn("animate-fade-in block", className)}>
+    <Notice role="alert" tone={quota ? "warn" : "danger"} className={cn("animate-fade-in block", className)}>
       {error instanceof Error ? error.message : "Something went wrong"}
       {quota ? (
         <Link to="/pricing" className="ml-1.5 inline-flex items-center gap-0.5 font-medium underline underline-offset-2">

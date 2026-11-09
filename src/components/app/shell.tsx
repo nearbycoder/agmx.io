@@ -23,7 +23,7 @@ import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { Logo } from "~/components/brand"
 import { Button } from "~/components/ui/button"
-import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
+import { DropdownChoices, DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { Kbd, Meter } from "~/components/ui/misc"
 import { signOutAndLeave } from "~/lib/auth-client"
 import { useApprovals } from "~/components/dashboard/queries"
@@ -217,27 +217,17 @@ function UserMenu({ user }: { user: SessionUser }) {
       </DropdownTrigger>
       <DropdownContent align="start" className="w-60">
         <DropdownLabel>Appearance</DropdownLabel>
-        <div className="grid grid-cols-3 gap-1 px-1 pb-1">
-          {(
-            [
-              ["light", Sun],
-              ["dark", Moon],
-              ["system", Monitor]
-            ] as const
-          ).map(([value, Icon]) => (
-            <button
-              key={value}
-              onClick={() => setTheme(value)}
-              className={cn(
-                "flex flex-col items-center gap-1 rounded-lg py-2 text-[11px] capitalize transition",
-                theme === value ? "bg-bg-subtle text-ink ring-1 ring-line" : "text-muted hover:bg-bg-subtle"
-              )}
-            >
-              <Icon className="size-4" />
-              {value}
-            </button>
-          ))}
-        </div>
+        <DropdownChoices
+          label="Appearance"
+          className="grid grid-cols-3 gap-1 px-1 pb-1"
+          value={theme}
+          onChange={setTheme}
+          options={[
+            { value: "light", label: "light", icon: <Sun /> },
+            { value: "dark", label: "dark", icon: <Moon /> },
+            { value: "system", label: "system", icon: <Monitor /> }
+          ]}
+        />
         <DropdownSeparator />
         <DropdownItem icon={<Settings />} onSelect={() => navigate({ to: "/app/settings" })}>
           Settings

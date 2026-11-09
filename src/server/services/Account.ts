@@ -17,7 +17,8 @@ import {
   storageDeletions,
   threads,
   usageDaily,
-  user
+  user,
+  webhookDeliveries
 } from "../db/schema"
 import { env } from "../env"
 import { newId, randomToken } from "../ids"
@@ -201,6 +202,8 @@ export class Account extends Context.Service<Account, {
             awsRegion: env.aws.region,
             sesConfigured: transport.name === "ses",
             inboundWebhookUrl: `${env.appUrl}/api/inbound/ses`,
+            inboundTopics: env.aws.inboundTopicArns.length,
+            production: env.isProduction,
             allowedEmails: env.allowedEmails.length ? env.allowedEmails : ["* (open sign-ups)"],
             sesAccount: account._tag === "Success" ? account.success : null,
             sesError: account._tag === "Failure" ? account.failure.message : null
@@ -308,6 +311,10 @@ export class Account extends Context.Service<Account, {
         }
         yield* db.use((d) =>
           d.delete(agentSignups).where(sql`${agentSignups.expiresAt} < now() - interval '7 days' and ${agentSignups.status} in ('pending', 'denied')`)
+        )
+        // The dashboard shows an agent's last 50 webhook deliveries; finished ones older than a month are just weight.
+        yield* db.use((d) =>
+          d.delete(webhookDeliveries).where(sql`${webhookDeliveries.status} in ('success', 'failed') and ${webhookDeliveries.createdAt} < now() - interval '30 days'`)
         )
       })
       yield* tick.pipe(

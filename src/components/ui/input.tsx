@@ -38,7 +38,7 @@ export const Field = ({
   <div className={cn("flex flex-col gap-1.5", className)}>
     <Label htmlFor={htmlFor}>{label}</Label>
     {children}
-    {error ? <p className="text-xs text-danger">{error}</p> : hint ? <p className="text-xs text-muted">{hint}</p> : null}
+    {error ? <p role="alert" className="text-xs text-danger">{error}</p> : hint ? <p className="text-xs text-muted">{hint}</p> : null}
   </div>
 )
 

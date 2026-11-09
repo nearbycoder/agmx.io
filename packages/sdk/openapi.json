@@ -1773,6 +1773,7 @@
             }
           }
         },
+        "description": "An agent key can't change its own send policy or resume itself once paused.",
         "summary": "Update an agent",
         "requestBody": {
           "content": {
@@ -3707,6 +3708,16 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenEncoded"
+                }
+              }
+            }
+          },
           "404": {
             "description": "NotFound",
             "content": {
@@ -3718,6 +3729,7 @@
             }
           }
         },
+        "description": "An agent key can pause its own inbox but can't reopen a paused or closed one.",
         "summary": "Update an inbox",
         "requestBody": {
           "content": {
@@ -5490,7 +5502,8 @@
                         "type": "object",
                         "additionalProperties": {
                           "type": "string"
-                        }
+                        },
+                        "description": "Up to 20 extra headers, such as `List-Unsubscribe` or your own `X-` headers. Headers AGMX writes itself (From, To, Cc, Bcc, Sender, Reply-To, Subject, Date, Message-ID, threading and MIME headers) can't be set here: use the matching fields instead."
                       },
                       {
                         "type": "null"
@@ -21211,6 +21224,12 @@
                     "inboundWebhookUrl": {
                       "type": "string"
                     },
+                    "inboundTopics": {
+                      "type": "number"
+                    },
+                    "production": {
+                      "type": "boolean"
+                    },
                     "allowedEmails": {
                       "type": "array",
                       "items": {
@@ -21236,6 +21255,32 @@
                             },
                             "maxSendRate": {
                               "type": "number"
+                            },
+                            "reviewStatus": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "PENDING",
+                                    "GRANTED",
+                                    "DENIED",
+                                    "FAILED"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "reviewCaseId": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             }
                           },
                           "required": [
@@ -21243,7 +21288,9 @@
                             "sendingEnabled",
                             "max24HourSend",
                             "sentLast24Hours",
-                            "maxSendRate"
+                            "maxSendRate",
+                            "reviewStatus",
+                            "reviewCaseId"
                           ],
                           "additionalProperties": false
                         },
@@ -21269,6 +21316,8 @@
                     "awsRegion",
                     "sesConfigured",
                     "inboundWebhookUrl",
+                    "inboundTopics",
+                    "production",
                     "allowedEmails",
                     "sesAccount",
                     "sesError"

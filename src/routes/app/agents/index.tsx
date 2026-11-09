@@ -174,7 +174,7 @@ function AgentCard({ agent }: { agent: AgentT }) {
           <div key={inbox.id} className="flex min-w-0 items-center gap-1" onClick={(e) => e.preventDefault()}>
             <code className={cn("min-w-0 truncate font-mono text-[12.5px]", inbox.status === "active" ? "text-ink-2" : "text-faint")}>{inbox.address}</code>
             <InboxStatusBadge inbox={inbox} className="shrink-0" />
-            <CopyButton value={inbox.address} size="xs" label="Address copied" className="opacity-0 transition-opacity group-hover:opacity-100" />
+            <CopyButton value={inbox.address} size="xs" label="Address copied" className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100" />
           </div>
         ))}
         {agent.inboxes.length > 3 ? <span className="text-[12px] text-muted">+{agent.inboxes.length - 3} more</span> : null}

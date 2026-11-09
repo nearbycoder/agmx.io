@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { AlertTriangle, CheckCircle2, Circle, ShieldAlert } from "lucide-react"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { Page, PageHeader } from "~/components/app/page"
 import { CopyField, KV, NativeSelect, Notice, QueryError, toastFailure } from "~/components/dashboard/common"
 import { Panel, Section } from "~/components/dashboard/section"
+import { ConfirmDialog } from "~/components/ui/dialog"
 import { Tooltip } from "~/components/ui/menu"
 import { EmptyState, Meter, Skeleton } from "~/components/ui/misc"
 import { Table, TBody, Td, Th, THead, Tr } from "~/components/ui/table"
@@ -46,6 +47,25 @@ function AdminPage() {
   )
 }
 
+type ReviewState = "PENDING" | "GRANTED" | "DENIED" | "FAILED" | "NONE"
+
+/** Shown next to "Sandbox" so an operator can tell a pending request from a refused one. */
+const REVIEW_LABEL: Record<ReviewState, string> = {
+  PENDING: " · request in review",
+  GRANTED: "",
+  DENIED: " · request denied",
+  FAILED: " · request failed",
+  NONE: ""
+}
+
+const REVIEW_HELP: Record<ReviewState, string> = {
+  PENDING: "Amazon is reviewing your request, which usually takes about a day.",
+  GRANTED: "",
+  DENIED: "Amazon turned the request down. Reply to the support case with more detail about who you email and how you handle bounces and complaints.",
+  FAILED: "The request couldn't be processed. Submit it again from the SES console.",
+  NONE: "Request production access from the SES console under Account dashboard."
+}
+
 function SystemSection() {
   const { data: sys, isLoading, error, refetch } = useQuery({ queryKey: qk.system, queryFn: () => api((c) => c.admin.system()) })
   if (error && !sys)
@@ -83,9 +103,18 @@ function SystemSection() {
       copy: `inbound-smtp.${region}.amazonaws.com`
     },
     {
-      done: null,
+      done: sys.inboundTopics > 0 || !sys.production ? null : false,
       title: "Receipt rule → SNS → AGMX",
-      body: <>Create an active receipt rule for the domain with an S3 + SNS action (or an SNS action with Base64 encoding), then subscribe this endpoint to the topic. Subscriptions confirm automatically.</>,
+      body: (
+        <>
+          Create an active receipt rule for the domain with an S3 + SNS action (or an SNS action with Base64 encoding). Set <Code>SES_INBOUND_TOPIC_ARNS</Code> to the topic's ARN, restart, then subscribe this endpoint to the topic.{" "}
+          {sys.inboundTopics > 0
+            ? `Mail is accepted from ${sys.inboundTopics} topic${sys.inboundTopics === 1 ? "" : "s"}.`
+            : sys.production
+              ? "No topic is set yet, so inbound mail is refused."
+              : "No topic is set, which is fine in development: any topic is accepted. Production refuses mail until one is set."}
+        </>
+      ),
       copy: sys.inboundWebhookUrl
     },
     {
@@ -100,7 +129,29 @@ function SystemSection() {
     {
       done: ses ? ses.productionAccess : null,
       title: "Request production access",
-      body: <>New SES accounts can only send to verified addresses. {ses ? (ses.productionAccess ? "Production access is enabled." : "This account is still in the sandbox.") : ""}</>
+      body: (
+        <>
+          {ses?.productionAccess
+            ? "Production access is enabled."
+            : ses
+              ? `This account is in the sandbox: SES only delivers to addresses you have verified, and caps sending at ${ses.max24HourSend.toLocaleString()} a day.`
+              : "New SES accounts start in the sandbox, where mail only reaches addresses you have verified and sending is capped at 200 a day."}{" "}
+          {ses && !ses.productionAccess ? REVIEW_HELP[ses.reviewStatus ?? "NONE"] : ""}
+          {ses && !ses.productionAccess && ses.reviewCaseId ? (
+            <>
+              {" "}
+              <a
+                href={`https://support.console.aws.amazon.com/support/home#/case/?displayId=${ses.reviewCaseId}&language=en`}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-ink underline decoration-line-strong underline-offset-2 hover:decoration-ink"
+              >
+                Open case {ses.reviewCaseId}
+              </a>
+            </>
+          ) : null}
+        </>
+      )
     }
   ]
 
@@ -125,7 +176,7 @@ function SystemSection() {
             {ses ? (
               <span className="inline-flex items-center gap-1.5">
                 {dot(ses.productionAccess)}
-                {ses.productionAccess ? "Enabled" : "Sandbox"}
+                {ses.productionAccess ? "Enabled" : `Sandbox${REVIEW_LABEL[ses.reviewStatus ?? "NONE"]}`}
               </span>
             ) : (
               <span className="text-faint">—</span>
@@ -199,13 +250,24 @@ function UsersSection() {
   const update = useMutation({
     mutationFn: (input: { userId: string; plan?: "free" | "pro" | "scale" | "unlimited"; role?: "user" | "admin" }) =>
       api((c) => c.admin.updateUser({ params: { userId: input.userId }, payload: { plan: input.plan, role: input.role } })),
-    onSuccess: (u) => {
+    onSuccess: (u, input) => {
       void queryClient.invalidateQueries({ queryKey: qk.adminUsers })
       void queryClient.invalidateQueries({ queryKey: qk.me })
-      toast.success(`Updated ${u.email}`)
+      setRoleChange(null)
+      const before = users?.find((x) => x.id === input.userId)?.plan as typeof input.plan
+      if (input.plan && before && before !== input.plan) {
+        // Plans change the moment the select does, so the way back is one click.
+        toast.success(`${u.email} is now on ${PLAN_NAMES[input.plan]}`, {
+          action: { label: "Undo", onClick: () => update.mutate({ userId: input.userId, plan: before }) }
+        })
+      } else {
+        toast.success(input.role ? `${u.email} is now ${input.role === "admin" ? "an operator" : "a regular user"}` : `Updated ${u.email}`)
+      }
     },
     onError: (e) => toastFailure(e)
   })
+  /** Role changes are confirmed first: an operator can see and change every account. */
+  const [roleChange, setRoleChange] = useState<{ userId: string; email: string; role: "user" | "admin" } | null>(null)
   const { data: me } = useMe()
   const rowPending = (userId: string) => update.isPending && update.variables?.userId === userId
   return (
@@ -256,11 +318,11 @@ function UsersSection() {
                       <option value="scale">Scale</option>
                       <option value="unlimited">Unlimited</option>
                     </NativeSelect>
-                    <RoleSelect user={u} self={u.id === me?.user.id} disabled={rowPending(u.id)} className="md:hidden" onChange={(role) => update.mutate({ userId: u.id, role })} />
+                    <RoleSelect user={u} self={u.id === me?.user.id} disabled={rowPending(u.id)} className="md:hidden" onChange={(role) => setRoleChange({ userId: u.id, email: u.email, role })} />
                   </div>
                 </Td>
                 <Td className="hidden md:table-cell">
-                  <RoleSelect user={u} self={u.id === me?.user.id} disabled={rowPending(u.id)} onChange={(role) => update.mutate({ userId: u.id, role })} />
+                  <RoleSelect user={u} self={u.id === me?.user.id} disabled={rowPending(u.id)} onChange={(role) => setRoleChange({ userId: u.id, email: u.email, role })} />
                 </Td>
                 <Td className="hidden whitespace-nowrap text-muted xl:table-cell">{relativeTime(u.createdAt)}</Td>
               </Tr>
@@ -268,9 +330,25 @@ function UsersSection() {
           </TBody>
         </Table>
       )}
+      <ConfirmDialog
+        open={roleChange !== null}
+        onOpenChange={(open) => !open && setRoleChange(null)}
+        title={roleChange?.role === "admin" ? `Make ${roleChange.email} an operator?` : `Remove operator access from ${roleChange?.email}?`}
+        description={
+          roleChange?.role === "admin"
+            ? "Operators can see every account on this server, change plans and roles, and read the server's configuration."
+            : "They keep their account, agents and mail, but lose access to this page."
+        }
+        confirmLabel={roleChange?.role === "admin" ? "Make operator" : "Remove access"}
+        tone={roleChange?.role === "admin" ? "primary" : "danger"}
+        loading={update.isPending}
+        onConfirm={() => roleChange && update.mutate({ userId: roleChange.userId, role: roleChange.role })}
+      />
     </Section>
   )
 }
+
+const PLAN_NAMES = { free: "Starter", pro: "Pro", scale: "Scale", unlimited: "Unlimited" } as const
 
 const Code = ({ children }: { children: ReactNode }) => <code className="font-mono text-[12px] text-ink-2">{children}</code>
 

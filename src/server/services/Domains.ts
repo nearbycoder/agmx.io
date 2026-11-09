@@ -79,10 +79,16 @@ export class Domains extends Context.Service<Domains, {
           const identity = yield* transport.createDomainIdentity(name).pipe(
             Effect.catch((error) =>
               /AlreadyExists/i.test(error.message)
-                ? transport.getDomainIdentity(name).pipe(Effect.map((i) => ({ dkimTokens: i.dkimTokens })))
+                ? transport.getDomainIdentity(name).pipe(Effect.map((i) => ({ dkimTokens: i.dkimTokens, alreadyVerified: i.verifiedForSending })))
                 : Effect.fail(error)
             )
           )
+          // The SES account already vouches for this domain, and nobody here has proved they control
+          // its DNS. Adding it would let this account send as the domain straight away.
+          if ("alreadyVerified" in identity && identity.alreadyVerified && transport.name === "ses")
+            return yield* new Conflict({
+              message: `${name} is already verified in this server's email account outside AGMX. Ask the operator to remove that identity, then add the domain again.`
+            })
           yield* transport.setReceiving(name, true)
           const [row] = yield* db.use((d) =>
             d.insert(domains).values({ id: newId("dom"), userId: principal.userId, name, dkimTokens: identity.dkimTokens }).returning()

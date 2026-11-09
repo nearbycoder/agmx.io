@@ -52,10 +52,11 @@ export const useMailActions = () => {
   }
 
   const update = useMutation({
-    mutationFn: async ({ ids, patch }: { ids: ReadonlyArray<string>; patch: MessagePatch; quiet?: boolean }) =>
+    mutationFn: async ({ ids, patch }: { ids: ReadonlyArray<string>; patch: MessagePatch }) =>
       Promise.all(ids.map((id) => api((c) => c.messages.update({ params: { messageId: id }, payload: patch })))),
     onMutate: async ({ ids, patch }) => {
-      await queryClient.cancelQueries({ queryKey: ["messages"] })
+      // An in-flight fetch would land after the optimistic patch and undo it on screen.
+      await Promise.all([queryClient.cancelQueries({ queryKey: ["messages"] }), queryClient.cancelQueries({ queryKey: ["thread"] })])
       patchCaches(new Set(ids), patch)
     },
     onError: (error) => {
@@ -68,7 +69,7 @@ export const useMailActions = () => {
     mutationFn: async (ids: ReadonlyArray<string>) =>
       Promise.all(ids.map((id) => api((c) => c.messages.delete({ params: { messageId: id } })))),
     onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey: ["messages"] })
+      await Promise.all([queryClient.cancelQueries({ queryKey: ["messages"] }), queryClient.cancelQueries({ queryKey: ["thread"] })])
       patchCaches(new Set(ids), "delete")
     },
     onSuccess: (_, ids) => toast.success(ids.length > 1 ? `${ids.length} messages deleted` : "Message deleted"),
@@ -85,6 +86,15 @@ export const useMailActions = () => {
 
 /** Outbound statuses that aren't real, sent mail yet. */
 export const UNSENT = new Set(["draft", "scheduled", "pending_approval", "rejected"])
+
+/**
+ * The message a thread-level action (star, forward) applies to: the newest real one,
+ * falling back to the newest of any kind when the thread holds only drafts or held mail.
+ */
+export const latestMessage = <M extends { status: string }>(messages: ReadonlyArray<M>): M | undefined => {
+  for (let i = messages.length - 1; i >= 0; i--) if (!UNSENT.has(messages[i]!.status)) return messages[i]
+  return messages[messages.length - 1]
+}
 
 /** Whether a message still belongs in the folder after a local flag change. */
 export const matchesFolder = (m: MessageSummaryT, folder: string) => {
