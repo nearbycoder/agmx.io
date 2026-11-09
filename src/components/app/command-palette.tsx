@@ -6,11 +6,9 @@ import { useEffect, useState, type ReactNode } from "react"
 import { AgentAvatar } from "~/components/brand"
 import { copyText } from "~/components/ui/misc"
 import { useAgents } from "~/lib/queries"
+import { isTyping } from "~/lib/utils"
 import { useTheme } from "~/lib/theme"
 import { useCompose } from "./compose-context"
-
-const isTyping = (target: EventTarget | null) =>
-  target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
 
 export const useCommandPalette = () => {
   const [open, setOpen] = useState(false)

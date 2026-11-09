@@ -83,7 +83,8 @@ function useOrigin() {
 function useActiveSection() {
   const [active, setActive] = useState(ALL_IDS[0]!)
   useEffect(() => {
-    const onScroll = () => {
+    const measure = () => {
+      frame = 0
       let current = ALL_IDS[0]!
       for (const id of ALL_IDS) {
         const el = document.getElementById(id)
@@ -91,9 +92,17 @@ function useActiveSection() {
       }
       setActive(current)
     }
-    onScroll()
+    // Measure at most once per frame: a scroll fires many events between paints.
+    let frame = 0
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure)
+    }
+    measure()
     window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
   }, [])
   return active
 }
@@ -810,15 +819,15 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
               [<code key="t">whoami</code>, "Account, plan limits, usage and the key's agent."],
               [<code key="t">list_inboxes</code>, "Inboxes the key can use, with unread counts."],
               [<code key="t">create_inbox</code>, "Claim a new address — permanent, or temporary with expiresIn, maxMessages and acceptFrom."],
-              [<code key="t">list_messages</code>, "List and search mail (folder, unread, query, cursor)."],
+              [<code key="t">list_messages</code>, "List and search mail (folder, unread, query, since, cursor). Folders include drafts, scheduled and pending."],
               [<code key="t">get_message</code>, "Read one email: safeText, security report, attachments and extracted data. Marks it read by default."],
               [<code key="t">wait_for_email</code>, "Block up to 60s for the next email — returns extracted codes and links."],
               [<code key="t">send_email</code>, "Send now or at sendAt, with optional attachments and an idempotencyKey."],
-              [<code key="t">reply_to_email</code>, "Reply in-thread, optionally to all."],
-              [<code key="t">forward_email</code>, "Forward with attachments."],
-              [<code key="t">create_draft / send_draft</code>, "Save a draft (or threaded reply draft) and send or schedule it later."],
+              [<code key="t">reply_to_email</code>, "Reply in-thread, optionally to all, with attachments."],
+              [<code key="t">forward_email</code>, "Forward with attachments, now or at sendAt."],
+              [<code key="t">create_draft / update_draft / send_draft / delete_draft</code>, "Save a draft (or threaded reply draft), edit it, then send, schedule or discard it."],
               [<code key="t">cancel_scheduled</code>, "Move a scheduled message back to drafts."],
-              [<code key="t">add_inbox_rule / list_inbox_rules</code>, "Manage allow, block and label rules on the agent's inboxes."],
+              [<code key="t">add_inbox_rule / list_inbox_rules / update_inbox_rule / delete_inbox_rule</code>, "Manage allow, block and label rules on the agent's inboxes."],
               [<code key="t">update_message</code>, "Read, star, archive, spam and labels."],
               [<code key="t">delete_message</code>, "Permanently delete."],
               [<code key="t">list_threads / get_thread</code>, "Browse and read whole conversations."]
@@ -1019,7 +1028,7 @@ const { apiKey, inbox, client } = await Agmx.signup({
               [<code key="v">DEFAULT_PLAN</code>, "Plan for new accounts (free, pro, scale, unlimited)."],
               [<code key="v">AWS_REGION / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY</code>, "SES credentials. Use a region with SES receiving (e.g. us-east-1)."],
               [<code key="v">SES_CONFIGURATION_SET</code>, "Optional: configuration set for delivery, bounce and complaint events."],
-              [<code key="v">SES_INBOUND_TOPIC_ARNS</code>, "Optional allow-list of SNS topic ARNs for the inbound webhook."],
+              [<code key="v">SES_INBOUND_TOPIC_ARNS</code>, "The SNS topic ARNs the inbound webhook accepts. Required in production; set it before subscribing the topic."],
               [<code key="v">SES_RECEIPT_RULE_SET / SES_RECEIPT_RULE</code>, "Optional: rule that custom domains get added to automatically."],
               [<code key="v">MAIL_TRANSPORT</code>, "ses or log. Defaults to ses when AWS credentials are present."],
               [<code key="v">SYSTEM_FROM</code>, "From address for sign-in emails, e.g. AGMX <no-reply@agmx.io>."],

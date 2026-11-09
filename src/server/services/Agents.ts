@@ -111,7 +111,7 @@ export class Agents extends Context.Service<Agents, {
     input: typeof D.CreateInboxPayload.Type
   ): Effect.Effect<typeof D.Inbox.Type, QuotaExceeded | Conflict | InvalidRequest | NotFound | Forbidden>
   createInboxForUser(userId: string, input: CreateInboxInput): Effect.Effect<InboxRow, QuotaExceeded | Conflict | InvalidRequest>
-  updateInbox(principal: Principal, inboxId: string, input: typeof D.UpdateInboxPayload.Type): Effect.Effect<typeof D.Inbox.Type, NotFound>
+  updateInbox(principal: Principal, inboxId: string, input: typeof D.UpdateInboxPayload.Type): Effect.Effect<typeof D.Inbox.Type, NotFound | Forbidden>
   removeInbox(principal: Principal, inboxId: string): Effect.Effect<void, NotFound>
 
   listKeys(principal: Principal): Effect.Effect<Array<typeof D.ApiKey.Type>, Forbidden>
@@ -380,9 +380,12 @@ export class Agents extends Context.Service<Agents, {
         }),
 
         update: Effect.fn("Agents.update")(function* (principal, agentId, input) {
-          yield* requireAgent(principal, agentId)
+          const current = yield* requireAgent(principal, agentId)
           if (principal.kind === "agent_key" && (input.sendPolicy !== undefined || input.approveAttachments !== undefined))
             return yield* new Forbidden({ message: "An agent can't change its own send policy. Ask a human to update it in the dashboard." })
+          // Pausing is a human's off switch: an agent may pause itself but never undo a pause.
+          if (principal.kind === "agent_key" && input.status === "active" && current.status !== "active")
+            return yield* new Forbidden({ message: "This agent is paused. Only a human can resume it, from the AGMX dashboard." })
           const webhookUrl = yield* validateWebhookUrl(input.webhookUrl)
           const patch: Partial<typeof agents.$inferInsert> = {}
           if (input.sendPolicy !== undefined) patch.sendPolicy = input.sendPolicy
@@ -448,6 +451,8 @@ export class Agents extends Context.Service<Agents, {
 
         updateInbox: Effect.fn("Agents.updateInbox")(function* (principal, inboxId, input) {
           const row = yield* requireInbox(principal, inboxId)
+          if (principal.kind === "agent_key" && input.status === "active" && row.status !== "active")
+            return yield* new Forbidden({ message: "This inbox is paused or closed. Only a human can reopen it, from the AGMX dashboard." })
           const patch: Partial<typeof inboxes.$inferInsert> = {}
           if (input.displayName !== undefined) patch.displayName = input.displayName?.trim() || null
           if (input.status !== undefined) patch.status = input.status

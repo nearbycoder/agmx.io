@@ -14,9 +14,9 @@ export const DefaultCatchBoundary = ({ error }: ErrorComponentProps) => {
         <Button variant="secondary" onClick={() => router.invalidate()}>
           <RotateCcw /> Try again
         </Button>
-        <Link to="/">
-          <Button variant="ghost">Home</Button>
-        </Link>
+        <Button asChild variant="ghost">
+          <Link to="/">Home</Link>
+        </Button>
       </div>
     </div>
   )
@@ -27,10 +27,10 @@ export const NotFound = () => (
     <div className="font-mono text-sm text-muted">550 5.1.1</div>
     <h1 className="text-3xl font-semibold tracking-tight">Mailbox unavailable</h1>
     <p className="max-w-sm text-sm text-muted">This page bounced. The address you followed doesn't exist.</p>
-    <Link to="/" className="mt-3">
-      <Button variant="secondary">
+    <Button asChild variant="secondary" className="mt-3">
+      <Link to="/">
         <ArrowLeft /> Back to AGMX
-      </Button>
-    </Link>
+      </Link>
+    </Button>
   </div>
 )

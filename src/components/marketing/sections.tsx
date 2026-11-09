@@ -423,11 +423,11 @@ export function PricingCards({ compact }: { compact?: boolean }) {
             <span className="text-[40px] leading-none font-semibold tracking-[-0.04em] tabular-nums">${plan.priceMonthly}</span>
             <span className="text-[13px] text-muted">/ month</span>
           </div>
-          <Link to="/login" className="mt-6">
-            <Button variant={plan.highlight ? "primary" : "secondary"} className="w-full">
+          <Button asChild variant={plan.highlight ? "primary" : "secondary"} className="mt-6 w-full">
+            <Link to="/login">
               {plan.priceMonthly === 0 ? "Start free" : `Request ${plan.name}`}
-            </Button>
-          </Link>
+            </Link>
+          </Button>
           <div className="mt-6 flex-1 border-t border-line pt-5">
             {compact ? (
               <ul className="flex flex-col gap-2.5">
@@ -464,9 +464,9 @@ export const SelfHostNote = ({ className }: { className?: string }) => (
         <p className="mt-0.5 text-[13.5px] text-muted">AGMX is MIT licensed. Run it with your own Amazon SES account, and every limit becomes yours to set.</p>
       </div>
     </div>
-    <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="shrink-0">
-      <Button variant="secondary">View on GitHub</Button>
-    </a>
+    <Button asChild variant="secondary" className="shrink-0">
+      <a href={GITHUB_URL} target="_blank" rel="noreferrer">View on GitHub</a>
+    </Button>
   </div>
 )
 
@@ -478,11 +478,11 @@ export function PricingPreview() {
           title="Priced by agents, not seats."
           description="Plans differ in how many agents and inboxes you run, and how much mail they send and receive. Each recipient counts as one send."
         />
-        <Link to="/pricing" className="shrink-0">
-          <Button variant="secondary">
+        <Button asChild variant="secondary" className="shrink-0">
+          <Link to="/pricing">
             Compare plans <ArrowRight />
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
       <div className="mt-12">
         <PricingCards compact />
@@ -583,16 +583,16 @@ export function FinalCta() {
       <h2 className="max-w-2xl text-4xl leading-[1.05] font-semibold tracking-[-0.035em] text-balance sm:text-5xl">Give your agent an inbox today.</h2>
       <p className="mt-4 max-w-lg text-[16px] leading-relaxed text-muted text-balance">Start on the free plan, or hand your agent one line and let it sign itself up.</p>
       <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
-        <Link to="/login" className="w-full sm:w-auto">
-          <Button size="lg" className="w-full">
+        <Button asChild size="lg" className="w-full sm:w-auto">
+          <Link to="/login">
             Get started free
-          </Button>
-        </Link>
-        <Link to="/docs" className="w-full sm:w-auto">
-          <Button size="lg" variant="secondary" className="w-full">
+          </Link>
+        </Button>
+        <Button asChild size="lg" variant="secondary" className="w-full sm:w-auto">
+          <Link to="/docs">
             Read the docs
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
       <SkillPrompt className="mt-8 w-full max-w-[34rem]" />
     </Section>

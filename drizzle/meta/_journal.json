@@ -43,6 +43,13 @@
       "when": 1793719890936,
       "tag": "0005_held_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794252660155,
+      "tag": "0006_precision_and_recovery",
+      "breakpoints": true
     }
   ]
 }

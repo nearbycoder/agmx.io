@@ -61,8 +61,27 @@ const providerIdFromMessageId = (messageId: string) => {
   return match ? match[1]! : null
 }
 
+/** An auto-responder's reply (vacation notices and the like), as opposed to automated mail such as sign-in codes. */
 const isAutoReply = (headers: Record<string, string>) =>
-  (headers["auto-submitted"] && headers["auto-submitted"] !== "no") || /bulk|junk|list|auto_reply/i.test(headers["precedence"] ?? "")
+  /^auto-replied/i.test(headers["auto-submitted"] ?? "") || /auto_reply/i.test(headers["precedence"] ?? "")
+
+/** Forward rules stamp each copy with how many rules it has been through, so two inboxes can't forward to each other forever. */
+const FORWARD_HOPS_HEADER = "x-agmx-forward-hops"
+const MAX_FORWARD_HOPS = 3
+const forwardHops = (headers: Record<string, string>) => {
+  const n = Number.parseInt(headers[FORWARD_HOPS_HEADER] ?? "0", 10)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/** Headers a caller may not set: they're ours to write, or would let a sender misrepresent the message. */
+const RESERVED_HEADERS = new Set([
+  "from", "sender", "to", "cc", "bcc", "reply-to", "subject", "date", "message-id", "in-reply-to", "references",
+  "return-path", "received", "dkim-signature", "authentication-results", "mime-version", "content-type",
+  "content-transfer-encoding", "content-disposition", "x-mailer", FORWARD_HOPS_HEADER, "x-ses-configuration-set"
+])
+const MAX_ATTACHMENTS = 25
+/** A message stuck in `sending` this long was interrupted (crash or redeploy) and is recovered by the worker. */
+const SENDING_TIMEOUT_MINUTES = 15
 
 /** Outbound lifecycle. Only `sending` and later are real, delivered (or attempted) mail. */
 export type OutboundStatus = "draft" | "scheduled" | "pending_approval" | "rejected" | "sending" | "sent" | "delivered" | "bounced" | "complained" | "failed"
@@ -91,6 +110,8 @@ interface SendContext {
   inReplyTo?: string | null
   references?: Array<string>
   idempotencyKey?: string | undefined
+  /** Headers AGMX itself adds (forward rules); these bypass the reserved-header check. */
+  trustedHeaders?: Record<string, string>
 }
 
 type SendError = QuotaExceeded | InvalidRequest | NotFound | Forbidden | DeliveryFailed | Conflict
@@ -119,6 +140,8 @@ export class Mail extends Context.Service<Mail, {
   reject(principal: Principal, messageId: string, reason?: string): Effect.Effect<typeof D.Message.Type, NotFound | Forbidden | Conflict>
   /** Send every scheduled message that is due. Safe to run on several instances. */
   readonly processScheduled: Effect.Effect<number>
+  /** Fail messages left in `sending` by a crash or redeploy, so they don't sit there forever. */
+  readonly recoverInterrupted: Effect.Effect<number>
   /** Deliver a copy of a stored message to `to` on behalf of its inbox (forward rules). */
   forwardCopy(messageId: string, to: string): Effect.Effect<void>
   wait(
@@ -380,6 +403,22 @@ export class Mail extends Context.Service<Mail, {
           if ((received?.n ?? 0) >= inbox.maxMessages) {
             yield* Effect.logInfo(`Dropping mail for ${inbox.address}: reached its ${inbox.maxMessages}-message limit`)
             return null
+          }
+        }
+
+        // SNS redelivers when we answer slowly or fail part-way through several inboxes. Storing the
+        // same message twice would also fire webhooks and forward rules twice.
+        if (parsed.messageId) {
+          const [duplicate] = yield* db.use((d) =>
+            d
+              .select({ id: messages.id })
+              .from(messages)
+              .where(and(eq(messages.rfcMessageId, parsed.messageId!), eq(messages.inboxId, inbox.id), eq(messages.direction, "inbound")))
+              .limit(1)
+          )
+          if (duplicate) {
+            yield* Effect.logInfo(`Skipping duplicate delivery of ${parsed.messageId} to ${inbox.address}`)
+            return duplicate.id
           }
         }
 
@@ -663,6 +702,33 @@ export class Mail extends Context.Service<Mail, {
             })
         })
 
+      const cleanHeaders = (input: Record<string, string> | undefined, trusted: Record<string, string> | undefined) =>
+        Effect.gen(function* () {
+          const out: Record<string, string> = {}
+          const entries = Object.entries(input ?? {})
+          if (entries.length > 20) return yield* new InvalidRequest({ message: "At most 20 custom headers per message.", field: "headers" })
+          for (const [name, value] of entries) {
+            const key = name.trim()
+            if (!/^[A-Za-z0-9-]{1,64}$/.test(key))
+              return yield* new InvalidRequest({ message: `"${name}" isn't a valid header name.`, field: "headers" })
+            if (RESERVED_HEADERS.has(key.toLowerCase()))
+              return yield* new InvalidRequest({ message: `The ${key} header is set by AGMX and can't be overridden.`, field: "headers" })
+            if (value.length > 998 || /[\r\n]/.test(value))
+              return yield* new InvalidRequest({ message: `The ${key} header must be a single line of at most 998 characters.`, field: "headers" })
+            out[key] = value
+          }
+          return { ...out, ...trusted }
+        })
+
+      /** Attachment count and total size, checked against the plan before any bytes are stored. */
+      const assertSize = (userId: string, files: ReadonlyArray<{ content: Buffer }>, text: string | null, html: string | null) =>
+        Effect.gen(function* () {
+          if (files.length > MAX_ATTACHMENTS)
+            return yield* new InvalidRequest({ message: `At most ${MAX_ATTACHMENTS} attachments per message.`, field: "attachments" })
+          const bytes = files.reduce((n, f) => n + f.content.byteLength, Buffer.byteLength(text ?? "") + Buffer.byteLength(html ?? ""))
+          yield* quota.checkMessageSize(userId, bytes)
+        })
+
       /**
        * Validate and store an outbound message. Drafts skip send validation;
        * everything else is checked, run through the agent's send policy and stored
@@ -686,6 +752,9 @@ export class Mail extends Context.Service<Mail, {
         const subject = (input.subject ?? "").replace(/[\r\n]+/g, " ").trim()
         const text = input.text ?? (input.html ? htmlToText(input.html) : null)
         const sendAt = yield* parseSendAt(input.sendAt)
+        const headers = yield* cleanHeaders(input.headers, context.trustedHeaders)
+        // Checked before anything is stored, so drafts can't be used as unlimited file storage.
+        yield* assertSize(inbox.userId, files, text, input.html ?? null)
 
         let status: OutboundStatus = "draft"
         let heldReason: string | null = null
@@ -725,17 +794,22 @@ export class Mail extends Context.Service<Mail, {
                     text,
                     html: input.html ?? null,
                     snippet: makeSnippet(text, input.html),
-                    headers: input.headers ?? {},
+                    headers,
                     labels: [...(input.labels ?? [])],
                     isRead: true,
                     sendAt,
+                    sendingAt: status === "sending" ? new Date() : null,
                     heldReason,
                     idempotencyKey: context.idempotencyKey ?? null,
                     sizeBytes: files.reduce((n, f) => n + f.content.byteLength, (text ?? "").length + (input.html ?? "").length)
                   })
                   .returning()
               )
-              if (inserted === null) return null
+              if (inserted === null) {
+                // Lost an idempotency race. Don't leave the thread we just made behind.
+                if (!context.threadId) yield* db.use((d) => d.delete(threads).where(eq(threads.id, threadId)))
+                return null
+              }
               if (prepared.rows.length) yield* db.use((d) => d.insert(attachments).values(prepared.rows))
               yield* refreshThread(threadId)
               return inserted[0]!
@@ -746,7 +820,9 @@ export class Mail extends Context.Service<Mail, {
           // Lost an idempotency race: return the message the other request created.
           yield* prepared.cleanup
           const existing = yield* findIdempotent(inbox.userId, context.idempotencyKey!)
-          return { row: existing!, heldReason: null, created: false }
+          if (!existing || !(yield* canSeeMessage(principal, existing)))
+            return yield* new Conflict({ message: "This idempotency key was already used for another message." })
+          return { row: existing, heldReason: null, created: false }
         }
         return { row, heldReason, created: true }
       })
@@ -755,6 +831,14 @@ export class Mail extends Context.Service<Mail, {
         db
           .use((d) => d.select().from(messages).where(and(eq(messages.userId, userId), eq(messages.idempotencyKey, key))).limit(1))
           .pipe(Effect.map((rows) => rows[0] ?? null))
+
+      /** Whether `principal` may read `row`: agent keys only see mail in their own agent's inboxes. */
+      const canSeeMessage = (principal: Principal, row: MessageRow) =>
+        !principal.agentId
+          ? Effect.succeed(row.userId === principal.userId)
+          : db
+              .use((d) => d.select({ agentId: inboxes.agentId }).from(inboxes).where(eq(inboxes.id, row.inboxId)).limit(1))
+              .pipe(Effect.map((rows) => row.userId === principal.userId && rows[0]?.agentId === principal.agentId))
 
       /** Atomically move a message between statuses; returns null if it wasn't in `from`. */
       const transition = (id: string, from: ReadonlyArray<OutboundStatus>, set: Partial<typeof messages.$inferInsert>) =>
@@ -783,8 +867,9 @@ export class Mail extends Context.Service<Mail, {
         const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, row.inboxId)))
         if (!inbox) return yield* new NotFound({ message: "Inbox not found.", resource: "inbox" })
         const sender = yield* loadAgentFor(inbox)
-        if (sender.sendingPausedAt) {
-          const message = pausedMessage(sender)
+        // Re-checked here because scheduled and approved mail is dispatched long after it was written.
+        if (sender.sendingPausedAt || inbox.status !== "active" || sender.status !== "active") {
+          const message = sender.sendingPausedAt ? pausedMessage(sender) : inactiveMessage(inbox)
           yield* fail(message)
           return yield* new Forbidden({ message })
         }
@@ -902,7 +987,12 @@ export class Mail extends Context.Service<Mail, {
           if (context.idempotencyKey.length > 200)
             return yield* new InvalidRequest({ message: "Idempotency keys can be at most 200 characters.", field: "idempotencyKey" })
           const existing = yield* findIdempotent(principal.userId, context.idempotencyKey)
-          if (existing) return yield* fullMessage(existing)
+          if (existing) {
+            // Keys are unique per account, but an agent key must never read another agent's mail through one.
+            if (!(yield* canSeeMessage(principal, existing)))
+              return yield* new Conflict({ message: "This idempotency key was already used for another message." })
+            return yield* fullMessage(existing)
+          }
         }
         const { row, heldReason, created } = yield* createOutbound(principal, input, context, "send")
         if (!created) return yield* fullMessage(row)
@@ -991,10 +1081,18 @@ export class Mail extends Context.Service<Mail, {
           if (!original) return
           const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, original.inboxId)).limit(1))
           if (!inbox) return
+          // Loop guards: a copy that has already been through several forward rules, or an
+          // auto-responder's reply (which would bounce between the two mailboxes), stops here.
+          const hops = forwardHops(original.headers)
+          if (hops >= MAX_FORWARD_HOPS || isAutoReply(original.headers)) {
+            yield* Effect.logInfo(`Not forwarding ${original.id} from ${inbox.address} to ${to}: ${hops >= MAX_FORWARD_HOPS ? "forwarded too many times" : "auto-reply"}`)
+            return
+          }
           const content = yield* forwardContent(original)
           // Rules are configured by the account owner, so they act with account authority (no send policy).
           const owner: Principal = { userId: inbox.userId, email: "", role: "user", plan: "free", kind: "account_key", agentId: null, apiKeyId: null }
-          yield* sendInternal(owner, { to, subject: content.subject, text: content.text, html: content.html(undefined), attachments: content.files }, { inbox }).pipe(
+          const trustedHeaders = { "Auto-Submitted": "auto-forwarded", "X-AGMX-Forward-Hops": String(hops + 1) }
+          yield* sendInternal(owner, { to, subject: content.subject, text: content.text, html: content.html(undefined), attachments: content.files }, { inbox, trustedHeaders }).pipe(
             Effect.catch((error) => Effect.logWarning(`Forward rule for ${inbox.address} → ${to} failed: ${error.message}`))
           )
         })
@@ -1210,8 +1308,19 @@ export class Mail extends Context.Service<Mail, {
             })
             Object.assign(set, r)
           }
+          // A thread belongs to one inbox. When the draft changes inbox it takes its own thread along,
+          // or starts a new one if it was a reply, so the old inbox's conversation never shows
+          // another inbox's mail.
+          let move: { inboxId: string; newThreadId: string | null } | null = null
           if (input.from !== undefined) {
             const inbox = yield* resolveSender(principal, input.from)
+            if (inbox.id !== current.inboxId) {
+              const [others] = yield* db.use((d) =>
+                d.select({ n: count() }).from(messages).where(and(eq(messages.threadId, current.threadId), sql`${messages.id} <> ${current.id}`))
+              )
+              move = { inboxId: inbox.id, newThreadId: (others?.n ?? 0) === 0 ? null : newId("thr") }
+              if (move.newThreadId) set.threadId = move.newThreadId
+            }
             set.inboxId = inbox.id
             set.fromAddress = inbox.address
             set.fromName = inbox.displayName
@@ -1224,20 +1333,46 @@ export class Mail extends Context.Service<Mail, {
             set.html = html
             set.snippet = makeSnippet(text, html)
           }
-          if (input.attachments !== undefined) {
-            const files = yield* decodeFiles(input.attachments)
-            const prepared = yield* prepareAttachments(current.userId, current.id, files)
-            yield* db
-              .transaction(
-                Effect.gen(function* () {
+          const files = input.attachments !== undefined ? yield* decodeFiles(input.attachments) : null
+          if (files || input.text !== undefined || input.html !== undefined) {
+            const kept = files
+              ? files.reduce((n, f) => n + f.content.byteLength, 0)
+              : ((yield* db.use((d) => d.select({ n: sql<number>`coalesce(sum(${attachments.size}), 0)::int` }).from(attachments).where(eq(attachments.messageId, current.id))))[0]?.n ?? 0)
+            if (files && files.length > MAX_ATTACHMENTS)
+              return yield* new InvalidRequest({ message: `At most ${MAX_ATTACHMENTS} attachments per message.`, field: "attachments" })
+            const text = set.text !== undefined ? set.text : current.text
+            const html = set.html !== undefined ? set.html : current.html
+            yield* quota.checkMessageSize(current.userId, kept + Buffer.byteLength(text ?? "") + Buffer.byteLength(html ?? ""))
+          }
+          const prepared = files ? yield* prepareAttachments(current.userId, current.id, files) : null
+          // The status check and the attachment swap commit together, so a draft that is sent
+          // while it's being edited keeps the attachments it was sent with.
+          const row = yield* db
+            .transaction(
+              Effect.gen(function* () {
+                if (move?.newThreadId) {
+                  const threadId = move.newThreadId
+                  yield* db.use((d) => d.insert(threads).values({ id: threadId, userId: current.userId, inboxId: move.inboxId, subject: current.subject }))
+                }
+                const locked = yield* transition(messageId, ["draft"], Object.keys(set).length ? set : { status: "draft" })
+                if (!locked) {
+                  if (move?.newThreadId) yield* db.use((d) => d.delete(threads).where(eq(threads.id, move.newThreadId!)))
+                  return null
+                }
+                if (move && !move.newThreadId) yield* db.use((d) => d.update(threads).set({ inboxId: move.inboxId }).where(eq(threads.id, current.threadId)))
+                if (prepared) {
                   yield* db.use((d) => d.delete(attachments).where(eq(attachments.messageId, current.id)))
                   if (prepared.rows.length) yield* db.use((d) => d.insert(attachments).values(prepared.rows))
-                })
-              )
-              .pipe(Effect.onError(() => prepared.cleanup))
+                }
+                return locked
+              })
+            )
+            .pipe(Effect.onError(() => prepared?.cleanup ?? Effect.void))
+          if (!row) {
+            if (prepared) yield* prepared.cleanup
+            return yield* new Conflict({ message: "This draft was sent or deleted meanwhile." })
           }
-          const row = Object.keys(set).length ? yield* transition(messageId, ["draft"], set) : current
-          if (!row) return yield* new Conflict({ message: "This draft was sent or deleted meanwhile." })
+          if (move?.newThreadId) yield* refreshThread(current.threadId)
           yield* events.publish({ type: "message.updated", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
           return yield* fullMessage(row)
         }),
@@ -1265,7 +1400,7 @@ export class Mail extends Context.Service<Mail, {
           const sendAt = yield* parseSendAt(sendAtInput)
           const heldReason = yield* approvalReason(principal, agent, inbox, all.map((a) => a.address), (att?.n ?? 0) > 0)
           const status: OutboundStatus = heldReason ? "pending_approval" : sendAt ? "scheduled" : "sending"
-          const row = yield* transition(draft.id, ["draft"], { status, sendAt, heldReason })
+          const row = yield* transition(draft.id, ["draft"], { status, sendAt, heldReason, sendingAt: status === "sending" ? new Date() : null })
           if (!row) return yield* new Conflict({ message: "This draft was already sent." })
           if (status === "sending") return yield* dispatch(row)
           if (heldReason) yield* notifyHeld(row, heldReason)
@@ -1294,10 +1429,12 @@ export class Mail extends Context.Service<Mail, {
           if (heldInbox) {
             const agent = yield* loadAgentFor(heldInbox)
             if (agent.sendingPausedAt) return yield* new Forbidden({ message: pausedMessage(agent) })
+            if (heldInbox.status !== "active" || agent.status !== "active") return yield* new Forbidden({ message: inactiveMessage(heldInbox) })
           }
           const scheduled = held.sendAt !== null && held.sendAt.getTime() > Date.now() + 5_000
           const row = yield* transition(held.id, ["pending_approval"], {
             status: scheduled ? "scheduled" : "sending",
+            sendingAt: scheduled ? null : new Date(),
             decidedBy: principal.email || principal.userId,
             decidedAt: new Date()
           })
@@ -1340,8 +1477,8 @@ export class Mail extends Context.Service<Mail, {
                   and(
                     eq(messages.status, "scheduled"),
                     lte(messages.sendAt, new Date()),
-                    // Scheduled mail from agents with paused sending waits until a human resumes them.
-                    sql`not exists (select 1 from ${inboxes} join ${agents} on ${agents.id} = ${inboxes.agentId} where ${inboxes.id} = ${messages.inboxId} and ${agents.sendingPausedAt} is not null)`
+                    // Scheduled mail from paused agents and inboxes waits until a human resumes them.
+                    sql`not exists (select 1 from ${inboxes} join ${agents} on ${agents.id} = ${inboxes.agentId} where ${inboxes.id} = ${messages.inboxId} and (${agents.sendingPausedAt} is not null or ${agents.status} = 'paused' or ${inboxes.status} = 'paused'))`
                   )
                 )
                 .orderBy(asc(messages.sendAt))
@@ -1350,7 +1487,7 @@ export class Mail extends Context.Service<Mail, {
               if (ids.length === 0) return []
               return d
                 .update(messages)
-                .set({ status: "sending" })
+                .set({ status: "sending", sendingAt: new Date() })
                 .where(inArray(messages.id, ids.map((r) => r.id)))
                 .returning()
             })
@@ -1370,6 +1507,32 @@ export class Mail extends Context.Service<Mail, {
             { concurrency: 4, discard: true }
           )
           return due.length
+        }),
+
+        recoverInterrupted: Effect.gen(function* () {
+          const stuck = yield* db.use((d) =>
+            d
+              .update(messages)
+              .set({
+                status: "failed",
+                // The Message-ID is written when quota is reserved, just before the hand-off to SES.
+                error: sql`case when ${messages.rfcMessageId} is null
+                  then 'Sending was interrupted before this message went out. It is safe to send it again.'
+                  else 'Sending was interrupted. This message may already have been delivered, so check before sending it again.' end`
+              })
+              .where(
+                and(
+                  eq(messages.status, "sending"),
+                  sql`coalesce(${messages.sendingAt}, ${messages.createdAt}) < now() - make_interval(mins => ${SENDING_TIMEOUT_MINUTES})`
+                )
+              )
+              .returning({ id: messages.id, userId: messages.userId, inboxId: messages.inboxId, threadId: messages.threadId })
+          )
+          for (const row of stuck) {
+            yield* Effect.logWarning(`Message ${row.id} was stuck in sending and has been marked failed`)
+            yield* events.publish({ type: "message.status", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
+          }
+          return stuck.length
         }),
 
         wait: Effect.fn("Mail.wait")(function* (principal, options) {
@@ -1473,19 +1636,21 @@ export class Mail extends Context.Service<Mail, {
           Effect.gen(function* () {
             const [row] = yield* db.use((d) => d.select().from(messages).where(eq(messages.providerMessageId, providerMessageId)).limit(1))
             if (!row) return
-            yield* db.use((d) =>
-              d
-                .update(messages)
-                .set({ status: event, error: event === "delivered" ? row.error : detail })
-                .where(eq(messages.id, row.id))
-            )
-            yield* events.publish({ type: "message.status", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
+            // One message can have several recipients, and their events arrive in any order. A bounce or
+            // complaint is never downgraded by a later delivery to someone else, and a complaint outranks a bounce.
+            const replaceable: ReadonlyArray<OutboundStatus> =
+              event === "delivered" ? ["sending", "sent"] : event === "bounced" ? ["sending", "sent", "delivered"] : ["sending", "sent", "delivered", "bounced"]
+            const updated = yield* transition(row.id, replaceable, { status: event, error: event === "delivered" ? row.error : detail })
             const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, row.inboxId)))
-            if (inbox && event !== "delivered") yield* reputation.evaluate(inbox.agentId)
+            if (updated) {
+              yield* events.publish({ type: "message.status", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
+              if (inbox && event !== "delivered") yield* reputation.evaluate(inbox.agentId)
+            }
+            // The webhook still fires for every event, so an agent hears about each recipient.
             if (inbox) {
               yield* webhooks.enqueue(inbox.agentId, `message.${event}`, {
                 inbox: { id: inbox.id, address: inbox.address },
-                message: toMessageSummary({ ...row, status: event }, 0),
+                message: toMessageSummary(updated ?? row, 0),
                 detail
               })
             }
@@ -1502,6 +1667,12 @@ export const ScheduledSendWorker = Layer.effectDiscard(
     yield* mail.processScheduled.pipe(
       Effect.catchCause((cause) => Effect.logError("Scheduled send tick failed", cause)),
       Effect.repeat(Schedule.spaced("10 seconds")),
+      Effect.forkScoped
+    )
+    yield* mail.recoverInterrupted.pipe(
+      Effect.catchCause((cause) => Effect.logError("Interrupted-send recovery failed", cause)),
+      Effect.repeat(Schedule.spaced("1 minute")),
+      Effect.delay("45 seconds"),
       Effect.forkScoped
     )
   })

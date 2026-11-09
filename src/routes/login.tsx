@@ -16,7 +16,8 @@ interface LoginSearch {
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
-    redirect: typeof search.redirect === "string" && search.redirect.startsWith("/") ? search.redirect : undefined,
+    // A path on this site only: "//host" and "/\\host" are other sites in a browser's eyes.
+    redirect: typeof search.redirect === "string" && /^\/(?![/\\])/.test(search.redirect) ? search.redirect : undefined,
     error: typeof search.error === "string" ? search.error : undefined
   }),
   beforeLoad: async ({ search }) => {
@@ -180,7 +181,9 @@ function LoginPage() {
 }
 
 const ErrorNote = ({ message }: { message: string }) => (
-  <div className="animate-fade-in rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-[13px] text-danger">{message}</div>
+  <div role="alert" className="animate-fade-in rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-[13px] text-danger">
+    {message}
+  </div>
 )
 
 function AsidePanel() {

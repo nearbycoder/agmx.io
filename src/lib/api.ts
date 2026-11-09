@@ -13,10 +13,12 @@ export class ApiClient extends Context.Service<ApiClient, HttpApiClient.ForApi<t
     ApiClient,
     HttpApiClient.make(AgmxApi, {
       baseUrl: typeof window === "undefined" ? "http://localhost:3100" : window.location.origin,
-      transformClient: (client) =>
-        client.pipe(
-          HttpClient.retryTransient({ schedule: Schedule.exponential("150 millis"), times: 2 })
-        )
+      transformClient: (client) => {
+        // Only reads are retried. Repeating a write after a dropped connection could create a
+        // second agent, key or draft when the first request did reach the server.
+        const retrying = client.pipe(HttpClient.retryTransient({ schedule: Schedule.exponential("150 millis"), times: 2 }))
+        return HttpClient.transform(client, (effect, request) => (request.method === "GET" ? retrying.execute(request) : effect))
+      }
     })
   ).pipe(Layer.provide(FetchHttpClient.layer))
 }

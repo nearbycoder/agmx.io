@@ -8,7 +8,7 @@ import { FolderPane, FOLDERS, type FolderId } from "~/components/mail/folder-pan
 import { ListSkeleton, LoadMoreSentinel, MessageRow } from "~/components/mail/message-list"
 import { ShortcutsDialog } from "~/components/mail/shortcuts"
 import { ThreadView, type ReplyMode } from "~/components/mail/thread-view"
-import { matchesFolder, useMailActions } from "~/components/mail/use-mail-actions"
+import { UNSENT, latestMessage, matchesFolder, useMailActions } from "~/components/mail/use-mail-actions"
 import { Button } from "~/components/ui/button"
 import { QueryError } from "~/components/dashboard/common"
 import { ConfirmDialog } from "~/components/ui/dialog"
@@ -18,7 +18,7 @@ import { toast } from "sonner"
 import { useMailList } from "~/components/mail/queries"
 import { api, errorMessage } from "~/lib/api"
 import { useAgents, useMe, useThread } from "~/lib/queries"
-import { cn } from "~/lib/utils"
+import { cn, isTyping } from "~/lib/utils"
 import { useDocumentTitle } from "~/lib/use-document-title"
 
 export interface MailSearch {
@@ -41,9 +41,6 @@ export const Route = createFileRoute("/app/mail")({
   head: () => ({ meta: [{ title: "Mail — AGMX" }] }),
   component: MailPage
 })
-
-const isTyping = (target: EventTarget | null) =>
-  target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
 
 const EMPTY_COPY: Record<FolderId, { title: string; description: string }> = {
   inbox: { title: "Inbox zero", description: "Nothing waiting. New mail for your agents shows up here instantly." },
@@ -99,13 +96,24 @@ function MailPage() {
   }, [messages.data, folder, unreadOnly])
 
   // Debounced search → URL.
+  const pushedQuery = useRef(search.q)
   useEffect(() => {
     const handle = setTimeout(() => {
-      if ((query.trim() || undefined) !== search.q) void navigate({ search: (prev) => ({ ...prev, q: query.trim() || undefined }), replace: true })
+      const next = query.trim() || undefined
+      if (next === search.q) return
+      pushedQuery.current = next
+      void navigate({ search: (prev) => ({ ...prev, q: next }), replace: true })
     }, 250)
     return () => clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
+
+  // URL → box, when the search changed somewhere else (back button, a link, the command palette).
+  useEffect(() => {
+    if (search.q === pushedQuery.current) return
+    pushedQuery.current = search.q
+    setQuery(search.q ?? "")
+  }, [search.q])
 
   // Keep the keyboard cursor on the open conversation.
   useEffect(() => {
@@ -191,8 +199,12 @@ function MailPage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return
+      // Anything layered on top (dialogs, menus, select lists) owns the keyboard while it's open.
+      if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-select-viewport]')) return
+      // Enter and the arrow keys belong to a focused button, link or tab; letters stay shortcuts.
+      const onControl = e.target instanceof Element && e.target.closest('button, a[href], summary, [role="tab"], [role="switch"], [role="menuitem"]') !== null
+      if (onControl && (e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === " ")) return
       const move = (delta: number) => {
         e.preventDefault()
         setKeyboardNav(true)
@@ -238,7 +250,8 @@ function MailPage() {
           return
         }
         case "s": {
-          const m = targetMessage()
+          // Same message the reader's star button acts on, so the two never disagree.
+          const m = search.t && thread && thread.id === search.t ? latestMessage(thread.messages) : focused
           if (!m) return
           e.preventDefault()
           actions.update([m.id], { isStarred: !m.isStarred })
@@ -256,7 +269,7 @@ function MailPage() {
         case "a":
         case "f": {
           const m = targetMessage()
-          if (!m || ["draft", "scheduled", "pending_approval", "rejected"].includes(m.status)) return
+          if (!m || UNSENT.has(m.status)) return
           e.preventDefault()
           openReply(m, e.key === "r" ? "reply" : e.key === "a" ? "replyAll" : "forward")
           return
@@ -298,11 +311,11 @@ function MailPage() {
           title="No inboxes yet"
           description={`Create an agent and give it an address like scout@${me?.mailDomain ?? "bot.agmx.io"}. Its mail will show up here in real time.`}
           action={
-            <Link to="/app/agents" search={{ new: true }}>
-              <Button>
+            <Button asChild>
+              <Link to="/app/agents" search={{ new: true }}>
                 <Bot /> Create your first agent
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           }
         />
       </div>
@@ -412,7 +425,9 @@ function MailPage() {
         </div>
 
         <div role="listbox" aria-label="Messages" className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-          {messages.isLoading ? (
+          {messages.isLoading || (messages.isPlaceholderData && rows.length === 0) ? (
+            // The second case: the previous folder's rows are still on screen while this one loads,
+            // and none of them belong here. A skeleton beats flashing "Nothing sent yet".
             <ListSkeleton />
           ) : messages.isError && rows.length === 0 ? (
             <QueryError error={messages.error} onRetry={() => messages.refetch()} what="messages" />

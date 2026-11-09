@@ -73,12 +73,6 @@ export const makeSnippet = (text: string | null | undefined, html?: string | nul
 export const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
-export const textToHtml = (text: string) =>
-  `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.55;color:#111">${escapeHtml(text)
-    .split(/\n{2,}/)
-    .map((para) => `<p style="margin:0 0 12px">${para.replace(/\n/g, "<br>")}</p>`)
-    .join("")}</div>`
-
 /** Quote a prior message for replies/forwards, in plain text. */
 export const quoteText = (header: string, body: string | null | undefined) =>
   `\n\n${header}\n${(body ?? "").split("\n").map((line) => `> ${line}`).join("\n")}`

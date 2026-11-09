@@ -83,11 +83,11 @@ function AgentPage() {
           title="Agent not found"
           description="It may have been deleted, or it belongs to another account."
           action={
-            <Link to="/app/agents">
-              <Button variant="secondary">
+            <Button asChild variant="secondary">
+              <Link to="/app/agents">
                 <ArrowLeft /> All agents
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           }
         />
       </Page>
@@ -197,13 +197,16 @@ function EditAgentDialog({
   const [name, setName] = useState(agent.name)
   const [description, setDescription] = useState(agent.description ?? "")
   const [color, setColor] = useState<AgentColorName>(agent.color as AgentColorName)
+  // Reset when the dialog opens, and only then: `agent` is a new object on every background
+  // refetch (new mail arriving, say), which would otherwise wipe what's being typed.
   useEffect(() => {
     if (open) {
       setName(agent.name)
       setDescription(agent.description ?? "")
       setColor(agent.color as AgentColorName)
     }
-  }, [open, agent])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
   const mutation = useMutation({
     mutationFn: () => api((c) => c.agents.update({ params: { agentId: agent.id }, payload: { name: name.trim(), description: description.trim() || null, color } })),
     onSuccess: () => {
@@ -330,11 +333,11 @@ function InboxesSection({ agentId, agentName, inboxes }: { agentId: string; agen
                   <RuleCount inboxId={inbox.id} />
                 </div>
               </div>
-              <Link to="/app/mail" search={{ inbox: inbox.id }} className="hidden sm:block">
-                <Button size="sm" variant="ghost">
+              <Button asChild size="sm" variant="ghost" className="hidden sm:inline-flex">
+                <Link to="/app/mail" search={{ inbox: inbox.id }}>
                   Open in Mail
-                </Button>
-              </Link>
+                </Link>
+              </Button>
               <DropdownMenu>
                 <DropdownTrigger asChild>
                   <Button size="icon-sm" variant="ghost" aria-label={`Actions for ${inbox.address}`}>

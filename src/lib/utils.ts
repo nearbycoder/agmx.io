@@ -47,7 +47,9 @@ export const initials = (value: string) =>
     .map((p) => p[0]!.toUpperCase())
     .join("") || "?"
 
-export const pct = (used: number, max: number | null) => (max === null || max === 0 ? 0 : Math.min(100, Math.round((used / max) * 100)))
+/** True when a keystroke is going into a text field, so single-key shortcuts should stay out of the way. */
+export const isTyping = (target: EventTarget | null) =>
+  target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
 
 const isApplePlatform = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
 

@@ -204,7 +204,7 @@ Plus-addressing works: mail to \`scout+github@${mailDomain}\` lands in \`scout@$
 
 Connect any MCP client to \`${origin}/mcp\` with header \`Authorization: Bearer agmx_…\`.
 
-Tools: \`whoami\`, \`list_inboxes\`, \`create_inbox\` (supports \`expiresIn\`, \`maxMessages\`, \`acceptFrom\`), \`list_messages\`, \`get_message\` (returns \`safeText\` + \`security\`; raw HTML only with \`includeRaw\`), \`wait_for_email\`, \`send_email\` (\`sendAt\`, \`idempotencyKey\`), \`reply_to_email\`, \`forward_email\`, \`create_draft\`, \`send_draft\`, \`cancel_scheduled\`, \`add_inbox_rule\`, \`list_inbox_rules\`, \`update_message\`, \`delete_message\`, \`list_threads\`, \`get_thread\`.
+Tools: \`whoami\`, \`list_inboxes\`, \`create_inbox\` (supports \`expiresIn\`, \`maxMessages\`, \`acceptFrom\`), \`list_messages\`, \`get_message\` (returns \`safeText\` + \`security\`; raw HTML only with \`includeRaw\`), \`wait_for_email\`, \`send_email\` (\`sendAt\`, \`idempotencyKey\`), \`reply_to_email\`, \`forward_email\`, \`create_draft\`, \`update_draft\`, \`delete_draft\`, \`send_draft\`, \`cancel_scheduled\`, \`add_inbox_rule\`, \`list_inbox_rules\`, \`update_inbox_rule\`, \`delete_inbox_rule\`, \`update_message\`, \`delete_message\`, \`list_threads\`, \`get_thread\`.
 
 If your MCP client can't send headers to remote servers, run the local bridge: \`npx -y agmx-cli mcp\` with \`AGMX_API_KEY\` set.
 
@@ -227,7 +227,7 @@ Every error is JSON with a stable \`_tag\` and a human \`message\`:
 | Status | \`_tag\` | What to do |
 | --- | --- | --- |
 | 401 | \`Unauthorized\` | Missing or revoked key. Re-check the \`Authorization\` header. |
-| 403 | \`Forbidden\` | Agent keys can't manage agents, keys, domains, approvals or their own send policy, and paused inboxes can't send. "Sending is paused" means too much of your mail bounced or drew spam complaints: stop sending and tell your human, who has to resume you. |
+| 403 | \`Forbidden\` | Agent keys can't manage agents, keys, domains, approvals or their own send policy, and paused inboxes can't send. You can pause yourself (\`PATCH /api/v1/agents/{agentId}\` with \`{"status":"paused"}\`) but only a human can resume you. "Sending is paused" means too much of your mail bounced or drew spam complaints: stop sending and tell your human, who has to resume you. |
 | 404 | \`NotFound\` | Wrong id, or it belongs to another agent. |
 | 409 | \`Conflict\` | Username already taken, or the message is in the wrong state (e.g. editing a draft that was already sent). |
 | 422 | \`InvalidRequest\` | Fix the field named in \`field\`. |

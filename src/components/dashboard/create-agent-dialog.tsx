@@ -83,6 +83,7 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
     <Dialog open={open} onOpenChange={onOpenChange}>
       {result ? (
         <DialogContent
+          dismissible={!result.apiKey}
           title={
             <span className="flex items-center gap-2.5">
               <AgentAvatar name={result.agent.name} color={result.agent.color} size="sm" /> {result.agent.name} is live
@@ -95,11 +96,11 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
               <Button variant="secondary" onClick={() => onOpenChange(false)}>
                 Done
               </Button>
-              <Link to="/app/agents/$agentId" params={{ agentId: result.agent.id }} onClick={() => onOpenChange(false)}>
-                <Button>
+              <Button asChild>
+                <Link to="/app/agents/$agentId" params={{ agentId: result.agent.id }} onClick={() => onOpenChange(false)}>
                   Open agent <ArrowRight />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </>
           }
         >

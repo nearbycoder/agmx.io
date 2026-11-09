@@ -74,7 +74,7 @@ export class AgentsGroup extends HttpApiGroup.make("agents")
       payload: D.UpdateAgentPayload,
       success: D.Agent,
       error: [NotFound, InvalidRequest, Forbidden]
-    }).annotateMerge(doc("Update an agent")),
+    }).annotateMerge(doc("Update an agent", "An agent key can't change its own send policy or resume itself once paused.")),
     HttpApiEndpoint.delete("delete", "/agents/:agentId", {
       params: IdParam("agentId"),
       success: Ok,
@@ -143,8 +143,8 @@ export class InboxesGroup extends HttpApiGroup.make("inboxes")
       params: IdParam("inboxId"),
       payload: D.UpdateInboxPayload,
       success: D.Inbox,
-      error: NotFound
-    }).annotateMerge(doc("Update an inbox")),
+      error: [NotFound, Forbidden]
+    }).annotateMerge(doc("Update an inbox", "An agent key can pause its own inbox but can't reopen a paused or closed one.")),
     HttpApiEndpoint.delete("delete", "/inboxes/:inboxId", {
       params: IdParam("inboxId"),
       success: Ok,

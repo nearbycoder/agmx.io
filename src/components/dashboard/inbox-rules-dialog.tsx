@@ -88,11 +88,30 @@ export function InboxRulesDialog({ inbox, onOpenChange }: { inbox: InboxT | null
     onMutate: (r) => {
       queryClient.setQueryData<ReadonlyArray<InboxRuleT>>(dk.rules(inboxId), (list) => list?.filter((x) => x.id !== r.id))
     },
-    onSuccess: () => toast.success("Rule deleted"),
+    // One click deletes, so offer the way back: removing the last Allow rule opens the inbox to everyone.
+    onSuccess: (_, r) =>
+      toast.success("Rule deleted", {
+        description: r.action === "allow" && !rules?.some((x) => x.id !== r.id && x.action === "allow" && x.enabled) ? "This inbox now accepts mail from any sender." : undefined,
+        action: { label: "Undo", onClick: () => restore.mutate(r) }
+      }),
     onError: (e) => {
       refresh()
       toastFailure(e)
     }
+  })
+  const restore = useMutation({
+    mutationFn: (r: InboxRuleT) =>
+      api((c) =>
+        c.rules.create({
+          params: { inboxId: r.inboxId },
+          payload: { field: r.field, value: r.value, action: r.action, target: r.target ?? undefined, position: r.position, enabled: r.enabled }
+        })
+      ),
+    onSuccess: () => {
+      refresh()
+      toast.success("Rule restored")
+    },
+    onError: (e) => toastFailure(e)
   })
 
   const submit = (e: FormEvent) => {

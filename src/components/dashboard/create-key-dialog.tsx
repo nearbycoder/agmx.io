@@ -49,7 +49,7 @@ export const CreateKeyDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {secret ? (
-        <DialogContent title="Your new API key" description={name} className="max-w-xl" footer={<Button onClick={() => onOpenChange(false)}>I've saved it</Button>}>
+        <DialogContent dismissible={false} title="Your new API key" description={name} className="max-w-xl" footer={<Button onClick={() => onOpenChange(false)}>I've saved it</Button>}>
           <SecretReveal secret={secret} />
         </DialogContent>
       ) : (

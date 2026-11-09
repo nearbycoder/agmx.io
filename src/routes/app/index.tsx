@@ -98,11 +98,11 @@ function OverviewPage() {
         }
         actions={
           <>
-            <Link to="/app/mail">
-              <Button variant="secondary">
+            <Button asChild variant="secondary">
+              <Link to="/app/mail">
                 <Inbox /> Open mail
-              </Button>
-            </Link>
+              </Link>
+            </Button>
             <Button onClick={() => setCreateOpen(true)}>
               <Plus /> New agent
             </Button>

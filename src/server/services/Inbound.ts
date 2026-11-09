@@ -124,6 +124,12 @@ export class Inbound extends Context.Service<Inbound, {
             } catch {
               return { status: 400, message: "Invalid JSON" }
             }
+            // A valid SNS signature only proves the message came from *some* AWS topic, so the topic
+            // itself must be one of ours. Outside production an empty list accepts any topic.
+            if (env.aws.inboundTopicArns.length === 0 && env.isProduction) {
+              yield* Effect.logError(`Rejected SNS message from ${envelope.TopicArn}: set SES_INBOUND_TOPIC_ARNS to the topic ARNs this server should accept.`)
+              return { status: 403, message: "SES_INBOUND_TOPIC_ARNS is not configured" }
+            }
             if (env.aws.inboundTopicArns.length && !env.aws.inboundTopicArns.includes(envelope.TopicArn.toLowerCase())) {
               return { status: 403, message: "Topic not allowed" }
             }

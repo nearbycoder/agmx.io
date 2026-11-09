@@ -156,12 +156,15 @@ export const ListSkeleton = () => (
 /** Fires `onVisible` whenever the sentinel scrolls into view (infinite scroll). */
 export function LoadMoreSentinel({ onVisible, disabled }: { onVisible: () => void; disabled: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
+  // Callers pass a fresh function each render; reading it through a ref keeps one observer alive.
+  const callback = useRef(onVisible)
+  callback.current = onVisible
   useEffect(() => {
     const el = ref.current
     if (!el || disabled) return
-    const observer = new IntersectionObserver((entries) => entries[0]?.isIntersecting && onVisible(), { rootMargin: "200px" })
+    const observer = new IntersectionObserver((entries) => entries[0]?.isIntersecting && callback.current(), { rootMargin: "200px" })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [onVisible, disabled])
+  }, [disabled])
   return <div ref={ref} className="h-1" />
 }

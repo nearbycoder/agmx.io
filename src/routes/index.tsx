@@ -83,16 +83,16 @@ function Landing() {
                 Real addresses your agents can sign up with, read verification codes from and reply on — over one REST API, an MCP server or webhooks.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link to="/login">
-                  <Button size="lg" className="w-full sm:w-auto">
+                <Button asChild size="lg" className="w-full sm:w-auto">
+                  <Link to="/login">
                     Get started free
-                  </Button>
-                </Link>
-                <Link to="/docs">
-                  <Button size="lg" variant="secondary" className="w-full sm:w-auto">
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="secondary" className="w-full sm:w-auto">
+                  <Link to="/docs">
                     Read the docs
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
               <SkillPrompt className="mt-10 w-full max-w-[31rem]" />
             </div>

@@ -7,7 +7,19 @@ type Lang = "bash" | "json" | "ts" | "py" | "text" | "http"
 const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 
 /** Tiny, dependency-free highlighter. Good enough for docs snippets. */
+/** Snippets are static, so each is highlighted once however often the page around it re-renders. */
+const highlighted = new Map<string, string>()
 export const highlight = (code: string, lang: Lang): string => {
+  const key = `${lang}\u0000${code}`
+  let html = highlighted.get(key)
+  if (html === undefined) {
+    html = tokenize(code, lang)
+    if (highlighted.size < 500) highlighted.set(key, html)
+  }
+  return html
+}
+
+const tokenize = (code: string, lang: Lang): string => {
   if (lang === "text") return escape(code)
   const rules: Array<[RegExp, string]> =
     lang === "json"
@@ -63,7 +75,7 @@ export const CodeBlock = ({ code, lang = "bash", title, className, wrap }: { cod
         <CopyButton value={code} className="text-white/50 hover:bg-white/10 hover:text-white" />
       </div>
     ) : (
-      <CopyButton value={code} className="absolute top-2 right-2 text-white/40 opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-white" />
+      <CopyButton value={code} className="absolute top-2 right-2 text-white/40 opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-white focus-visible:opacity-100 [@media(hover:none)]:opacity-100" />
     )}
     <pre className={cn("scrollbar-thin overflow-x-auto p-4 text-[12.5px] leading-[1.7]", wrap && "break-words whitespace-pre-wrap")}>
       <code dangerouslySetInnerHTML={{ __html: highlight(code, lang) }} />

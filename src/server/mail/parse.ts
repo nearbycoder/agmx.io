@@ -29,7 +29,7 @@ const flatten = (list: ReadonlyArray<PostalAddress> | PostalAddress | undefined 
 
 const KEPT_HEADERS = new Set([
   "date", "message-id", "in-reply-to", "references", "list-unsubscribe", "list-id", "return-path", "x-mailer",
-  "auto-submitted", "precedence", "x-auto-response-suppress", "authentication-results", "content-language", "x-agmx-tag"
+  "auto-submitted", "precedence", "x-auto-response-suppress", "authentication-results", "content-language", "x-agmx-tag", "x-agmx-forward-hops"
 ])
 
 export const parseMime = async (raw: Buffer | Uint8Array | string): Promise<ParsedEmail> => {

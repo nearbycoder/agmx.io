@@ -143,7 +143,10 @@ export interface paths {
         delete: operations["agents.delete"];
         options?: never;
         head?: never;
-        /** Update an agent */
+        /**
+         * Update an agent
+         * @description An agent key can't change its own send policy or resume itself once paused.
+         */
         patch: operations["agents.update"];
         trace?: never;
     };
@@ -300,7 +303,10 @@ export interface paths {
         delete: operations["inboxes.delete"];
         options?: never;
         head?: never;
-        /** Update an inbox */
+        /**
+         * Update an inbox
+         * @description An agent key can pause its own inbox but can't reopen a paused or closed one.
+         */
         patch: operations["inboxes.update"];
         trace?: never;
     };
@@ -2379,6 +2385,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnauthorizedEncoded"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForbiddenEncoded"];
                 };
             };
             /** @description NotFound */
@@ -6789,6 +6804,8 @@ export interface operations {
                         awsRegion: string;
                         sesConfigured: boolean;
                         inboundWebhookUrl: string;
+                        inboundTopics: number;
+                        production: boolean;
                         allowedEmails: string[];
                         sesAccount: {
                             productionAccess: boolean;
@@ -6796,6 +6813,8 @@ export interface operations {
                             max24HourSend: number;
                             sentLast24Hours: number;
                             maxSendRate: number;
+                            reviewStatus: ("PENDING" | "GRANTED" | "DENIED" | "FAILED") | null;
+                            reviewCaseId: string | null;
                         } | null;
                         sesError: string | null;
                     };

@@ -13,6 +13,10 @@ const list = (key: string): Array<string> =>
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean)
 
+// Sessions are signed with this. A missing secret in production would fall back to a value anyone can read in the source.
+if (read("NODE_ENV") === "production" && !read("BETTER_AUTH_SECRET"))
+  throw new Error("BETTER_AUTH_SECRET is not set. Generate one with `openssl rand -hex 32` and set it before starting AGMX in production.")
+
 const appUrl = (read("APP_URL") ?? read("BETTER_AUTH_URL") ?? (read("RAILWAY_PUBLIC_DOMAIN") ? `https://${read("RAILWAY_PUBLIC_DOMAIN")}` : "http://localhost:3100")).replace(/\/$/, "")
 const mailDomain = (read("MAIL_DOMAIN") ?? "agmx.io").toLowerCase()
 /** Optional brand domain (e.g. agmx.io) where only operators may create inboxes such as admin@ or support@. */
@@ -37,8 +41,8 @@ export const env = {
     accessKeyId: read("AWS_ACCESS_KEY_ID"),
     secretAccessKey: read("AWS_SECRET_ACCESS_KEY"),
     configurationSet: read("SES_CONFIGURATION_SET"),
-    /** Optional allow-list of SNS topic ARNs accepted by the inbound webhook. */
-    inboundTopicArns: list("SES_INBOUND_TOPIC_ARNS").map((arn) => arn),
+    /** SNS topic ARNs the inbound webhook accepts. Required in production: without it anyone's topic could post mail. */
+    inboundTopicArns: list("SES_INBOUND_TOPIC_ARNS"),
     /** Rule set + rule used when a custom domain is added, so SES accepts mail for it. */
     receiptRuleSet: read("SES_RECEIPT_RULE_SET"),
     receiptRule: read("SES_RECEIPT_RULE")
