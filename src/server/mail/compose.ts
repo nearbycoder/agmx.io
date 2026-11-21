@@ -71,7 +71,7 @@ export const makeSnippet = (text: string | null | undefined, html?: string | nul
 }
 
 export const escapeHtml = (value: string) =>
-  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 
 /** Quote a prior message for replies/forwards, in plain text. */
 export const quoteText = (header: string, body: string | null | undefined) =>

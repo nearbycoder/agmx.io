@@ -12,6 +12,7 @@ stable ``tag`` (e.g. "QuotaExceeded", "NotFound") you can branch on.
 from __future__ import annotations
 
 import json
+import socket
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -68,8 +69,10 @@ def _http(method: str, url: str, *, headers: Optional[Dict[str, str]] = None, bo
             payload = {}
         raise AgmxError(str(payload.get("_tag", "HttpError")), str(payload.get("message", exc.reason)), exc.code, payload) from None
     except urlerror.URLError as exc:
+        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+            raise AgmxError("Timeout", f"Request timed out: {method} {url}") from None
         raise AgmxError("NetworkError", f"Network error: {exc.reason}") from None
-    except TimeoutError:
+    except (TimeoutError, socket.timeout):
         raise AgmxError("Timeout", f"Request timed out: {method} {url}") from None
 
 
@@ -100,6 +103,21 @@ class Agmx:
         """Account, plan limits, usage, and which agent this key belongs to."""
         return self.request("GET", "/me")
 
+    def export_data(self) -> Json:
+        """Export account metadata, messages and usage as JSON (account keys only)."""
+        return self.request("GET", "/account/export")
+
+    # -- agents ---------------------------------------------------------------
+
+    def reputation(self, agent_id: str) -> Json:
+        return self.request("GET", f"/agents/{parse.quote(agent_id, safe='')}/reputation")
+
+    def pause_sending(self, agent_id: str, *, reason: Optional[str] = None) -> Json:
+        return self.request("POST", f"/agents/{parse.quote(agent_id, safe='')}/sending/pause", body=_clean({"reason": reason}))
+
+    def resume_sending(self, agent_id: str) -> Json:
+        return self.request("POST", f"/agents/{parse.quote(agent_id, safe='')}/sending/resume")
+
     # -- inboxes --------------------------------------------------------------
 
     def inboxes(self, agent_id: Optional[str] = None) -> List[Json]:
@@ -120,28 +138,53 @@ class Agmx:
     # -- messages -------------------------------------------------------------
 
     def messages(self, *, inbox_id: Optional[str] = None, folder: Optional[str] = None, unread: Optional[bool] = None,
-                 q: Optional[str] = None, limit: int = 25, cursor: Optional[str] = None) -> Json:
+                 q: Optional[str] = None, since: Optional[str] = None, limit: int = 25,
+                 cursor: Optional[str] = None) -> Json:
         return self.request("GET", "/messages", query={
-            "inboxId": inbox_id, "folder": folder, "unread": unread, "q": q, "limit": limit, "cursor": cursor})
+            "inboxId": inbox_id, "folder": folder, "unread": unread, "q": q, "since": since,
+            "limit": limit, "cursor": cursor})
 
     def get_message(self, message_id: str, *, mark_read: Optional[bool] = None) -> Json:
         """Full message. Read ``safeText`` (visible text only) and check ``security["risk"]``."""
         return self.request("GET", f"/messages/{parse.quote(message_id, safe='')}", query={"markRead": mark_read})
 
+    def update_message(self, message_id: str, *, is_read: Optional[bool] = None, is_starred: Optional[bool] = None,
+                       is_archived: Optional[bool] = None, is_spam: Optional[bool] = None,
+                       labels: Optional[List[str]] = None) -> Json:
+        return self.request("PATCH", f"/messages/{parse.quote(message_id, safe='')}", body=_clean({
+            "isRead": is_read, "isStarred": is_starred, "isArchived": is_archived,
+            "isSpam": is_spam, "labels": labels,
+        }))
+
+    def delete_message(self, message_id: str) -> Json:
+        return self.request("DELETE", f"/messages/{parse.quote(message_id, safe='')}")
+
     def send(self, to: Recipients, subject: str = "", *, text: Optional[str] = None, html: Optional[str] = None,
              from_: Optional[str] = None, cc: Optional[Recipients] = None, bcc: Optional[Recipients] = None,
-             attachments: Optional[List[Json]] = None, send_at: Optional[str] = None,
-             idempotency_key: Optional[str] = None) -> Json:
+             reply_to: Optional[Recipients] = None, attachments: Optional[List[Json]] = None,
+             send_at: Optional[str] = None, idempotency_key: Optional[str] = None) -> Json:
         """Send (or schedule with ``send_at``). Retries are safe: an idempotency key is always sent."""
-        body = _clean({"from": from_, "to": to, "cc": cc, "bcc": bcc, "subject": subject, "text": text, "html": html,
-                       "attachments": attachments, "sendAt": send_at})
+        body = _clean({"from": from_, "to": to, "cc": cc, "bcc": bcc, "replyTo": reply_to, "subject": subject,
+                       "text": text, "html": html, "attachments": attachments, "sendAt": send_at})
         return self.request("POST", "/messages", body=body, headers=self._idem(idempotency_key))
 
     def reply(self, message_id: str, *, text: Optional[str] = None, html: Optional[str] = None,
-              reply_all: bool = False, send_at: Optional[str] = None, idempotency_key: Optional[str] = None) -> Json:
+              reply_all: bool = False, attachments: Optional[List[Json]] = None, send_at: Optional[str] = None,
+              idempotency_key: Optional[str] = None) -> Json:
         return self.request("POST", f"/messages/{parse.quote(message_id, safe='')}/reply",
-                            body=_clean({"text": text, "html": html, "replyAll": reply_all or None, "sendAt": send_at}),
+                            body=_clean({"text": text, "html": html, "replyAll": reply_all or None,
+                                         "attachments": attachments, "sendAt": send_at}),
                             headers=self._idem(idempotency_key))
+
+    def forward(self, message_id: str, to: Recipients, *, text: Optional[str] = None,
+                send_at: Optional[str] = None, idempotency_key: Optional[str] = None) -> Json:
+        return self.request("POST", f"/messages/{parse.quote(message_id, safe='')}/forward",
+                            body=_clean({"to": to, "text": text, "sendAt": send_at}),
+                            headers=self._idem(idempotency_key))
+
+    def cancel(self, message_id: str) -> Json:
+        """Cancel a scheduled send (moves it back to drafts)."""
+        return self.request("POST", f"/messages/{parse.quote(message_id, safe='')}/cancel")
 
     def wait(self, *, inbox_id: Optional[str] = None, from_: Optional[str] = None, subject: Optional[str] = None,
              timeout: int = 30, since: Optional[str] = None) -> Json:
@@ -183,8 +226,37 @@ class Agmx:
     def send_draft(self, message_id: str, *, send_at: Optional[str] = None) -> Json:
         return self.request("POST", f"/drafts/{parse.quote(message_id, safe='')}/send", body=_clean({"sendAt": send_at}))
 
-    def drafts(self, inbox_id: Optional[str] = None) -> Json:
-        return self.request("GET", "/drafts", query={"inboxId": inbox_id})
+    def drafts(self, inbox_id: Optional[str] = None, *, limit: Optional[int] = None, cursor: Optional[str] = None) -> Json:
+        return self.request("GET", "/drafts", query={"inboxId": inbox_id, "limit": limit, "cursor": cursor})
+
+    def delete_draft(self, message_id: str) -> Json:
+        return self.request("DELETE", f"/drafts/{parse.quote(message_id, safe='')}")
+
+    # -- threads & rules ------------------------------------------------------
+
+    def threads(self, *, inbox_id: Optional[str] = None, agent_id: Optional[str] = None,
+                limit: int = 25, cursor: Optional[str] = None) -> Json:
+        return self.request("GET", "/threads", query={"inboxId": inbox_id, "agentId": agent_id, "limit": limit, "cursor": cursor})
+
+    def get_thread(self, thread_id: str) -> Json:
+        return self.request("GET", f"/threads/{parse.quote(thread_id, safe='')}")
+
+    def rules(self, inbox_id: str) -> List[Json]:
+        return self.request("GET", f"/inboxes/{parse.quote(inbox_id, safe='')}/rules")
+
+    def create_rule(self, inbox_id: str, *, field: str, value: str, action: str,
+                    target: Optional[str] = None) -> Json:
+        return self.request("POST", f"/inboxes/{parse.quote(inbox_id, safe='')}/rules",
+                            body=_clean({"field": field, "value": value, "action": action, "target": target}))
+
+    def update_rule(self, rule_id: str, *, field: Optional[str] = None, value: Optional[str] = None,
+                    action: Optional[str] = None, target: Optional[str] = None,
+                    enabled: Optional[bool] = None) -> Json:
+        return self.request("PATCH", f"/rules/{parse.quote(rule_id, safe='')}",
+                            body=_clean({"field": field, "value": value, "action": action, "target": target, "enabled": enabled}))
+
+    def delete_rule(self, rule_id: str) -> Json:
+        return self.request("DELETE", f"/rules/{parse.quote(rule_id, safe='')}")
 
     def approvals(self) -> List[Json]:
         """Mail held by an agent's send policy (humans and account keys only)."""

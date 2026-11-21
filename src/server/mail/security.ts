@@ -35,8 +35,8 @@ const INSTRUCTION_PATTERNS: Array<[RegExp, string]> = [
 const HIDDEN_STYLE: Array<[RegExp, string]> = [
   [/display\s*:\s*none/i, "display:none"],
   [/visibility\s*:\s*hidden/i, "visibility:hidden"],
-  [/opacity\s*:\s*0(\.0+)?\s*(;|$)/i, "opacity:0"],
-  [/font-size\s*:\s*(0|0?\.\d+|1)(px|pt|em|rem)?\s*(;|$)/i, "zero-size font"],
+  [/opacity\s*:\s*0(\.0+)?(?:\s*!important)?\s*(;|$)/i, "opacity:0"],
+  [/font-size\s*:\s*(?:0(?:\.0+)?(?:px|pt|em|rem|%)?|(?:0?\.\d+|1)(?:px|pt)|0?\.0\d*(?:em|rem))(?:\s*!important)?\s*(;|$)/i, "zero-size font"],
   [/(max-)?height\s*:\s*0(px)?\s*(;|$)[^]*overflow\s*:\s*hidden|overflow\s*:\s*hidden[^]*(max-)?height\s*:\s*0(px)?\s*(;|$)/i, "collapsed box"],
   [/(left|top|text-indent)\s*:\s*-\d{3,}(px|em)/i, "positioned off-screen"],
   [/clip\s*:\s*rect\(\s*0/i, "clipped to nothing"]

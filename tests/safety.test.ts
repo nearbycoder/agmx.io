@@ -36,6 +36,19 @@ describe("prompt-injection analysis", () => {
     expect(smuggled.safeText).toBe("Hello there")
   })
 
+  it("does not flag normal relative font sizes (1rem, 0.875rem, 1em) as zero-size text", () => {
+    const html = `<p style="font-size: 1rem">Hello world, here is your invoice summary.</p><p style="font-size: 0.875rem">Thank you for your business.</p><p style="font-size: 1em">Normal em text here.</p>`
+    const r = analyzeSecurity("Invoice", null, html)
+    expect(r.security.risk).toBe("low")
+    expect(r.security.hiddenContent).toBe(false)
+    expect(r.safeText).toContain("invoice summary")
+    expect(r.safeText).toContain("Thank you for your business")
+
+    const tiny = analyzeSecurity("Hidden", null, `<p>Visible</p><span style="font-size: 0.05rem">Secret hidden prompt instruction</span>`)
+    expect(tiny.security.hiddenContent).toBe(true)
+    expect(tiny.safeText).toBe("Visible")
+  })
+
   it("does not extract codes planted in hidden content", () => {
     const html = `<p>Welcome aboard.</p><div style="display:none">Your verification code is 999111</div>`
     const scan = analyzeSecurity("Welcome", null, html)
@@ -63,9 +76,11 @@ describe("structured extraction", () => {
     expect(event).toMatchObject({ title: "Design review", start: "2026-11-05T20:00:00.000Z", location: "Zoom", organizer: "ada@example.com", method: "REQUEST" })
   })
 
-  it("parses all-day events", () => {
-    const [event] = parseCalendar("BEGIN:VEVENT\nSUMMARY:Offsite\nDTSTART;VALUE=DATE:20261201\nEND:VEVENT")
-    expect(event).toMatchObject({ allDay: true, start: "2026-12-01" })
+  it("parses all-day events and rejects unsafe URL schemes", () => {
+    const [event] = parseCalendar("BEGIN:VEVENT\nSUMMARY:Offsite\nDTSTART;VALUE=DATE:20261201\nURL:javascript:alert(1)\nEND:VEVENT")
+    expect(event).toMatchObject({ allDay: true, start: "2026-12-01", url: null })
+    const [safe] = parseCalendar("BEGIN:VEVENT\nSUMMARY:Call\nDTSTART;VALUE=DATE:20261201\nURL:https://meet.example.com/room?a=1\nEND:VEVENT")
+    expect(safe?.url).toBe("https://meet.example.com/room?a=1")
   })
 
   it("parses receipts", () => {

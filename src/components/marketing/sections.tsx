@@ -377,7 +377,7 @@ export function Features() {
         <FeatureRow
           title="REST or MCP. Same tools, same limits."
           body="A small, typed API with an OpenAPI 3.1 spec, and an MCP server that wraps exactly the same operations. Every error has a stable _tag your agent can branch on."
-          points={["13 MCP tools over Streamable HTTP at /mcp", "Bearer keys scoped to the account or a single agent", "Interactive reference at /api/v1/reference"]}
+          points={["22 MCP tools over Streamable HTTP at /mcp", "Bearer keys scoped to the account or a single agent", "Interactive reference at /api/v1/reference"]}
           visual={<CodeTabs tabs={codeSamples()} />}
         />
       </div>

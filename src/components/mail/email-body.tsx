@@ -75,6 +75,11 @@ export function HtmlFrame({ html, attachments }: { html: string; attachments: Me
 
 const URL_RE = /(https?:\/\/[^\s<>"')\]]+)/g
 
+const splitTrailingPunct = (url: string): [string, string] => {
+  const m = url.match(/^(.*?)([.,;:!?]+)$/)
+  return m ? [m[1]!, m[2]!] : [url, ""]
+}
+
 /** Plain text with linkified URLs and dimmed quoted replies. */
 export function PlainBody({ text, className }: { text: string; className?: string }) {
   const lines = text.replace(/\r\n/g, "\n").split("\n")
@@ -87,15 +92,18 @@ export function PlainBody({ text, className }: { text: string; className?: strin
         {visible.map((line, i) => (
           <Fragment key={i}>
             <span className={line.startsWith(">") ? "text-muted" : undefined}>
-              {line.split(URL_RE).map((part, j) =>
-                /^https?:\/\//.test(part) ? (
-                  <a key={j} href={part} target="_blank" rel="noreferrer noopener" className="text-info underline decoration-info/30 underline-offset-2 hover:decoration-info">
-                    {part}
-                  </a>
-                ) : (
-                  <Fragment key={j}>{part}</Fragment>
+              {line.split(URL_RE).map((part, j) => {
+                if (!/^https?:\/\//.test(part)) return <Fragment key={j}>{part}</Fragment>
+                const [href, punct] = splitTrailingPunct(part)
+                return (
+                  <Fragment key={j}>
+                    <a href={href} target="_blank" rel="noreferrer noopener" className="text-info underline decoration-info/30 underline-offset-2 hover:decoration-info">
+                      {href}
+                    </a>
+                    {punct}
+                  </Fragment>
                 )
-              )}
+              })}
             </span>
             {i < visible.length - 1 ? "\n" : null}
           </Fragment>

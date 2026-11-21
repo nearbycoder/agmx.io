@@ -137,9 +137,22 @@ export class Inbound extends Context.Service<Inbound, {
             if (!valid) return { status: 403, message: "Invalid SNS signature" }
 
             if (envelope.Type === "SubscriptionConfirmation" && envelope.SubscribeURL) {
-              const url = new URL(envelope.SubscribeURL)
-              if (!/^sns\.[a-z0-9-]+\.amazonaws\.com$/.test(url.hostname)) return { status: 400, message: "Bad SubscribeURL" }
-              yield* Effect.promise(() => fetch(url).then((r) => r.text()))
+              let url: URL
+              try {
+                url = new URL(envelope.SubscribeURL)
+              } catch {
+                return { status: 400, message: "Bad SubscribeURL" }
+              }
+              if (
+                url.protocol !== "https:" ||
+                url.port !== "" ||
+                url.username !== "" ||
+                url.password !== "" ||
+                !/^sns\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/.test(url.hostname)
+              ) {
+                return { status: 400, message: "Bad SubscribeURL" }
+              }
+              yield* Effect.promise(() => fetch(url, { signal: AbortSignal.timeout(10_000) }).then((r) => r.text()))
               yield* Effect.logInfo(`Confirmed SNS subscription for ${envelope.TopicArn}`)
               return { status: 200, message: "Subscription confirmed" }
             }

@@ -28,6 +28,8 @@ const err = (...lines) => process.stderr.write(lines.join("\n") + "\n")
 // Args & config
 // ---------------------------------------------------------------------------
 
+const BOOLEAN_FLAGS = new Set(["help", "version", "json", "unread", "raw", "code"])
+
 /** Minimal parser: positionals plus --flag value / --flag=value / --bool. */
 const parseArgs = (argv) => {
   const positionals = []
@@ -42,6 +44,7 @@ const parseArgs = (argv) => {
       const [name, inline] = arg.slice(2).split(/=(.*)/s)
       const next = argv[i + 1]
       if (inline !== undefined) flags[name] = inline
+      else if (BOOLEAN_FLAGS.has(name)) flags[name] = true
       else if (next !== undefined && !next.startsWith("--")) {
         flags[name] = next
         i++
@@ -122,10 +125,10 @@ ${bold("Inboxes")}
   agmx inboxes delete <inboxId>
 
 ${bold("Mail")}
-  agmx mail [--inbox i] [--folder inbox|sent|drafts|scheduled|pending|all] [--limit 20] [--unread]
+  agmx mail [--inbox i] [--folder inbox|sent|drafts|scheduled|pending|all] [--q search] [--since ISO] [--cursor c] [--limit 20] [--unread]
   agmx read <messageId> [--raw]                                 Visible text, security report, codes & links
   agmx wait [--inbox i] [--from github.com] [--subject s] [--timeout 60] [--code]
-  agmx send --to a@b.com --subject s (--text t | --html h) [--from inbox] [--at ISO-time]
+  agmx send --to a@b.com --subject s (--text t | --html h) [--from inbox] [--cc a,b] [--bcc c] [--reply-to r] [--at ISO] [--idempotency-key k]
 
 ${bold("Agents")}
   agmx mcp                                                     Local MCP server (stdio) proxying to AGMX
@@ -222,6 +225,8 @@ const commands = {
       folder: flags.folder === true ? undefined : flags.folder,
       unread: flags.unread ? "true" : undefined,
       q: flags.q === true ? undefined : flags.q,
+      since: flags.since === true ? undefined : flags.since,
+      cursor: flags.cursor === true ? undefined : flags.cursor,
       limit: flags.limit ? Number(flags.limit) : 20
     })
     if (json(flags, page)) return
@@ -279,10 +284,13 @@ const commands = {
       from: flags.from === true ? undefined : flags.from,
       to: list(flags.to),
       cc: list(flags.cc),
+      bcc: list(flags.bcc),
+      replyTo: list(flags["reply-to"]),
       subject: flags.subject === true || flags.subject === undefined ? "" : flags.subject,
       text: flags.text === true ? undefined : flags.text,
       html: flags.html === true ? undefined : flags.html,
-      sendAt: flags.at === true ? undefined : flags.at
+      sendAt: flags.at === true ? undefined : flags.at,
+      idempotencyKey: flags["idempotency-key"] === true ? undefined : flags["idempotency-key"]
     })
     if (json(flags, message)) return
     const status =

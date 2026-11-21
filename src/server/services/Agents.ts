@@ -96,7 +96,8 @@ export class Agents extends Context.Service<Agents, {
   /** Creates an agent on behalf of a user, bypassing principal checks (used by sign-up approval). */
   createForUser(
     userId: string,
-    input: typeof D.CreateAgentPayload.Type
+    input: typeof D.CreateAgentPayload.Type,
+    options?: { createInbox?: boolean }
   ): Effect.Effect<{ agent: AgentRow; inbox: InboxRow | null }, QuotaExceeded | Conflict | InvalidRequest>
   update(principal: Principal, agentId: string, input: typeof D.UpdateAgentPayload.Type): Effect.Effect<typeof D.Agent.Type, NotFound | InvalidRequest | Forbidden>
   remove(principal: Principal, agentId: string): Effect.Effect<void, NotFound | Forbidden>
@@ -300,7 +301,11 @@ export class Agents extends Context.Service<Agents, {
         return inbox
       })
 
-      const createForUser = Effect.fn("Agents.createForUser")(function* (userId: string, input: typeof D.CreateAgentPayload.Type) {
+      const createForUser = Effect.fn("Agents.createForUser")(function* (
+        userId: string,
+        input: typeof D.CreateAgentPayload.Type,
+        options?: { createInbox?: boolean }
+      ) {
         yield* quota.checkAgents(userId)
         const webhookUrl = yield* validateWebhookUrl(input.webhookUrl)
         return yield* db.transaction(
@@ -322,7 +327,7 @@ export class Agents extends Context.Service<Agents, {
                 .returning()
             )
             const inbox =
-              input.username !== undefined || input.domain !== undefined || input.createApiKey
+              options?.createInbox || input.username !== undefined || input.domain !== undefined || input.createApiKey
                 ? yield* createInboxForUser(userId, { agentId: agent!.id, username: input.username, domain: input.domain, displayName: input.name })
                 : null
             return { agent: agent!, inbox }

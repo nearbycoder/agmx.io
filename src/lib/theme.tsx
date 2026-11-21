@@ -28,7 +28,13 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     setThemeState(stored)
     setResolved(apply(stored))
     const media = window.matchMedia("(prefers-color-scheme: dark)")
-    const onChange = () => setResolved(apply((localStorage.getItem("agmx-theme") as Theme) || "system"))
+    const onChange = () => {
+      let current: Theme = "system"
+      try {
+        current = (localStorage.getItem("agmx-theme") as Theme) || "system"
+      } catch {}
+      setResolved(apply(current))
+    }
     media.addEventListener("change", onChange)
     return () => media.removeEventListener("change", onChange)
   }, [])

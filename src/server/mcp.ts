@@ -337,12 +337,16 @@ const tools = [
 ]
 
 const toolList = tools.map((t) => {
-  const { schema } = Schema.toJsonSchemaDocument(t.input)
+  const { schema, definitions } = Schema.toJsonSchemaDocument(t.input)
   return {
     name: t.name,
     title: t.title,
     description: t.description,
-    inputSchema: { ...schema, type: "object" },
+    inputSchema: {
+      ...schema,
+      type: "object",
+      ...(Object.keys(definitions).length ? { $defs: definitions } : {})
+    },
     annotations: { title: t.title, readOnlyHint: t.readOnly ?? false, destructiveHint: t.name.startsWith("delete_"), openWorldHint: t.name.includes("send") || t.name.includes("reply") || t.name.includes("forward") }
   }
 })
@@ -378,7 +382,7 @@ const callTool = (principal: Principal, name: string, args: unknown) =>
     const result = yield* t.run(principal, decoded.success).pipe(Effect.result)
     if (result._tag === "Failure") {
       const error = result.failure
-      return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: error._tag, message: error.message }) }] }
+      return { isError: true, content: [{ type: "text", text: JSON.stringify({ _tag: error._tag, error: error._tag, message: error.message }) }] }
     }
     const value = result.success
     return {

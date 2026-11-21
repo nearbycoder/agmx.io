@@ -16,13 +16,29 @@ export const Route = createFileRoute("/api/events")({
 
         const encoder = new TextEncoder()
         let fiber: ReturnType<typeof runtime.runFork> | undefined
+        let streamController: ReadableStreamDefaultController<Uint8Array> | undefined
+        let closed = false
+        const close = () => {
+          if (closed) return
+          closed = true
+          const running = fiber
+          fiber = undefined
+          if (running) runtime.runFork(Fiber.interrupt(running))
+          try {
+            streamController?.close()
+          } catch {
+            /* already closed */
+          }
+        }
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
+            streamController = controller
             const send = (chunk: string) => {
+              if (closed) return
               try {
                 controller.enqueue(encoder.encode(chunk))
               } catch {
-                /* stream closed */
+                close()
               }
             }
             send(`retry: 3000\nevent: ready\ndata: {}\n\n`)
@@ -31,7 +47,7 @@ export const Route = createFileRoute("/api/events")({
                 Effect.gen(function* () {
                   const events = yield* Events
                   const subscription = yield* events.subscribe
-                  while (true) {
+                  while (!closed) {
                     const next = yield* PubSub.take(subscription).pipe(Effect.timeoutOption("20 seconds"))
                     if (next._tag === "None") {
                       send(`: ping\n\n`)
@@ -45,12 +61,10 @@ export const Route = createFileRoute("/api/events")({
             )
           },
           cancel() {
-            if (fiber) runtime.runFork(Fiber.interrupt(fiber))
+            close()
           }
         })
-        request.signal.addEventListener("abort", () => {
-          if (fiber) runtime.runFork(Fiber.interrupt(fiber))
-        })
+        request.signal.addEventListener("abort", close, { once: true })
         return new Response(stream, {
           headers: { "content-type": "text/event-stream", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no" }
         })

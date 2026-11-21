@@ -31,12 +31,21 @@ interface Bucket {
 }
 
 const buckets = new Map<string, Bucket>()
+const MAX_BUCKETS = 20_000
 let lastSweep = Date.now()
 
 const sweep = (now: number) => {
-  if (now - lastSweep < 60_000) return
+  if (now - lastSweep < 60_000 && buckets.size <= MAX_BUCKETS) return
   lastSweep = now
   for (const [key, bucket] of buckets) if (bucket.resetAt <= now) buckets.delete(key)
+  if (buckets.size > MAX_BUCKETS) {
+    const excess = buckets.size - MAX_BUCKETS
+    let removed = 0
+    for (const key of buckets.keys()) {
+      buckets.delete(key)
+      if (++removed >= excess) break
+    }
+  }
 }
 
 export interface RateResult {

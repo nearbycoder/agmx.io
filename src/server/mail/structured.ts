@@ -37,11 +37,21 @@ const parseIcsDate = (value: string, params: Record<string, string>): { iso: str
   if (z) return { iso: new Date(naive).toISOString(), allDay: false }
   const tz = params.TZID?.replace(/^"|"$/g, "")
   if (!tz) return { iso: new Date(naive).toISOString().replace("Z", ""), allDay: false }
-  const offset = tzOffset(naive, tz)
+  const first = tzOffset(naive, tz)
+  const offset = tzOffset(naive - first, tz)
   return { iso: new Date(naive - offset).toISOString(), allDay: false }
 }
 
 const unescapeIcs = (v: string) => v.replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1").trim()
+
+const safeHttpUrl = (raw: string): string | null => {
+  try {
+    const parsed = new URL(raw.trim())
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : null
+  } catch {
+    return null
+  }
+}
 
 export const parseCalendar = (ics: string): Array<ExtractedEvent> => {
   const lines = ics.replace(/\r\n[ \t]/g, "").replace(/\n[ \t]/g, "").split(/\r?\n/)
@@ -54,7 +64,12 @@ export const parseCalendar = (ics: string): Array<ExtractedEvent> => {
     const [rawName, ...paramParts] = line.slice(0, idx).split(";")
     const name = rawName!.toUpperCase()
     const value = line.slice(idx + 1)
-    const params = Object.fromEntries(paramParts.map((p) => p.split("=") as [string, string]).map(([k, v]) => [k.toUpperCase(), v ?? ""]))
+    const params = Object.fromEntries(
+      paramParts.map((p) => {
+        const eq = p.indexOf("=")
+        return eq < 0 ? [p.toUpperCase(), ""] : [p.slice(0, eq).toUpperCase(), p.slice(eq + 1)]
+      })
+    )
     if (name === "METHOD") method = value.trim()
     else if (name === "BEGIN" && value.trim() === "VEVENT") current = { allDay: false }
     else if (name === "END" && value.trim() === "VEVENT" && current) {
@@ -79,7 +94,7 @@ export const parseCalendar = (ics: string): Array<ExtractedEvent> => {
       } else if (name === "DTEND") current.end = parseIcsDate(value.trim(), params).iso
       else if (name === "LOCATION") current.location = unescapeIcs(value) || null
       else if (name === "ORGANIZER") current.organizer = value.replace(/^mailto:/i, "").trim() || params.CN || null
-      else if (name === "URL") current.url = value.trim()
+      else if (name === "URL") current.url = safeHttpUrl(value)
       else if (name === "UID") current.uid = value.trim()
     }
   }

@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import { parseAddress } from "~/shared/address"
 import { env } from "./env"
 import { newId } from "./ids"
-import { composeMime } from "./mail/compose"
+import { composeMime, escapeHtml } from "./mail/compose"
 import { MailTransport } from "./services/MailTransport"
 
 /** Transactional mail sent by AGMX itself (magic links, password resets). */
@@ -31,20 +31,39 @@ export const sendSystemEmail = (input: { to: string; subject: string; text: stri
     yield* transport.send({ from: env.systemFrom, recipients: [input.to], raw })
   })
 
-const abuseHtml = () =>
-  env.systemInboxes.includes("abuse")
-    ? `<br><br>Report abuse: <a href="mailto:abuse@${env.contactDomain}" style="color:#8a8a85">abuse@${env.contactDomain}</a>`
-    : ""
+const safeLink = (value: string) => {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : env.appUrl
+  } catch {
+    return env.appUrl
+  }
+}
 
-export const buttonEmail = (opts: { heading: string; body: string; cta: string; url: string; footer: string }) => ({
-  text: `${opts.heading}\n\n${opts.body}\n\n${opts.cta}: ${opts.url}\n\n${opts.footer}${env.systemInboxes.includes("abuse") ? `\n\nReport abuse: abuse@${env.contactDomain}` : ""}`,
-  html: `<!doctype html><html><body style="margin:0;background:#f4f4f0;padding:40px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+const abuseHtml = () => {
+  if (!env.systemInboxes.includes("abuse")) return ""
+  const domain = escapeHtml(env.contactDomain)
+  return `<br><br>Report abuse: <a href="mailto:abuse@${domain}" style="color:#8a8a85">abuse@${domain}</a>`
+}
+
+export const buttonEmail = (opts: { heading: string; body: string; cta: string; url: string; footer: string }) => {
+  const url = safeLink(opts.url)
+  const heading = escapeHtml(opts.heading)
+  const body = escapeHtml(opts.body)
+  const cta = escapeHtml(opts.cta)
+  const footer = escapeHtml(opts.footer)
+  const escapedUrl = escapeHtml(url)
+  const appUrl = escapeHtml(env.appUrl)
+  return {
+    text: `${opts.heading}\n\n${opts.body}\n\n${opts.cta}: ${url}\n\n${opts.footer}${env.systemInboxes.includes("abuse") ? `\n\nReport abuse: abuse@${env.contactDomain}` : ""}`,
+    html: `<!doctype html><html><body style="margin:0;background:#f4f4f0;padding:40px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
   <table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e6e6df" cellpadding="0" cellspacing="0">
-    <tr><td style="padding:32px 32px 0"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="vertical-align:middle"><img src="${env.appUrl}/email-logo.png" width="28" height="28" alt="" style="display:block;border:0;border-radius:7px"></td><td style="vertical-align:middle;padding-left:9px;font-size:19px;font-weight:600;letter-spacing:-0.04em;color:#0c0c0d">agmx</td></tr></table></td></tr>
-    <tr><td style="padding:24px 32px 8px"><h1 style="margin:0;font-size:22px;line-height:1.3;color:#0b0b0c">${opts.heading}</h1></td></tr>
-    <tr><td style="padding:0 32px 24px;color:#4a4a48;font-size:15px;line-height:1.6">${opts.body}</td></tr>
-    <tr><td style="padding:0 32px 32px"><a href="${opts.url}" style="display:inline-block;background:#0c0c0d;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:11px 18px;border-radius:8px">${opts.cta}</a></td></tr>
-    <tr><td style="padding:20px 32px;border-top:1px solid #efefea;color:#8a8a85;font-size:12px;line-height:1.5">${opts.footer}<br><span style="word-break:break-all">${opts.url}</span>${abuseHtml()}</td></tr>
+    <tr><td style="padding:32px 32px 0"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="vertical-align:middle"><img src="${appUrl}/email-logo.png" width="28" height="28" alt="" style="display:block;border:0;border-radius:7px"></td><td style="vertical-align:middle;padding-left:9px;font-size:19px;font-weight:600;letter-spacing:-0.04em;color:#0c0c0d">agmx</td></tr></table></td></tr>
+    <tr><td style="padding:24px 32px 8px"><h1 style="margin:0;font-size:22px;line-height:1.3;color:#0b0b0c">${heading}</h1></td></tr>
+    <tr><td style="padding:0 32px 24px;color:#4a4a48;font-size:15px;line-height:1.6">${body}</td></tr>
+    <tr><td style="padding:0 32px 32px"><a href="${escapedUrl}" style="display:inline-block;background:#0c0c0d;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:11px 18px;border-radius:8px">${cta}</a></td></tr>
+    <tr><td style="padding:20px 32px;border-top:1px solid #efefea;color:#8a8a85;font-size:12px;line-height:1.5">${footer}<br><span style="word-break:break-all">${escapedUrl}</span>${abuseHtml()}</td></tr>
   </table></td></tr></table></body></html>`
-})
+  }
+}

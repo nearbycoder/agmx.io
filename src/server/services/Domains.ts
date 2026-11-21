@@ -17,10 +17,10 @@ import { Quota } from "./Quota"
 const DOMAIN_RE = /^(?=.{4,253}$)(?!-)([a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$/
 
 export class Domains extends Context.Service<Domains, {
-  list(principal: Principal): Effect.Effect<Array<typeof D.Domain.Type>>
-  get(principal: Principal, id: string): Effect.Effect<typeof D.Domain.Type, NotFound>
+  list(principal: Principal): Effect.Effect<Array<typeof D.Domain.Type>, Forbidden>
+  get(principal: Principal, id: string): Effect.Effect<typeof D.Domain.Type, NotFound | Forbidden>
   create(principal: Principal, name: string): Effect.Effect<typeof D.Domain.Type, QuotaExceeded | Conflict | InvalidRequest | Forbidden | DeliveryFailed>
-  verify(principal: Principal, id: string): Effect.Effect<typeof D.Domain.Type, NotFound>
+  verify(principal: Principal, id: string): Effect.Effect<typeof D.Domain.Type, NotFound | Forbidden>
   remove(principal: Principal, id: string): Effect.Effect<void, NotFound | Forbidden>
 }>()("agmx/services/Domains") {
   static readonly layer = Layer.effect(
@@ -59,12 +59,16 @@ export class Domains extends Context.Service<Domains, {
       })
 
       return Domains.of({
-        list: (principal) =>
-          db
-            .use((d) => d.select().from(domains).where(eq(domains.userId, principal.userId)).orderBy(desc(domains.createdAt)))
-            .pipe(Effect.map((rows) => rows.map(toDomain))),
+        list: Effect.fn("Domains.list")(function* (principal) {
+          yield* requireAccount(principal, "view domains")
+          const rows = yield* db.use((d) => d.select().from(domains).where(eq(domains.userId, principal.userId)).orderBy(desc(domains.createdAt)))
+          return rows.map(toDomain)
+        }),
 
-        get: (principal, id) => requireDomain(principal, id).pipe(Effect.map(toDomain)),
+        get: Effect.fn("Domains.get")(function* (principal, id) {
+          yield* requireAccount(principal, "view domains")
+          return toDomain(yield* requireDomain(principal, id))
+        }),
 
         create: Effect.fn("Domains.create")(function* (principal, input) {
           yield* requireAccount(principal, "add domains")
@@ -90,13 +94,16 @@ export class Domains extends Context.Service<Domains, {
               message: `${name} is already verified in this server's email account outside AGMX. Ask the operator to remove that identity, then add the domain again.`
             })
           yield* transport.setReceiving(name, true)
-          const [row] = yield* db.use((d) =>
+          const inserted = yield* db.useUnique((d) =>
             d.insert(domains).values({ id: newId("dom"), userId: principal.userId, name, dkimTokens: identity.dkimTokens }).returning()
           )
-          return toDomain(transport.name === "log" ? yield* refresh(row!) : row!)
+          if (!inserted?.[0]) return yield* new Conflict({ message: `${name} is already connected to an AGMX account.` })
+          const row = inserted[0]
+          return toDomain(transport.name === "log" ? yield* refresh(row) : row)
         }),
 
         verify: Effect.fn("Domains.verify")(function* (principal, id) {
+          yield* requireAccount(principal, "verify domains")
           const row = yield* requireDomain(principal, id)
           return toDomain(yield* refresh(row))
         }),

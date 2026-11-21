@@ -22,6 +22,9 @@ const shouldSend = (key: string, now: number) => {
     windowStart = now
     sentInWindow = 0
     suppressedInWindow = 0
+    for (const [k, ts] of lastSent) if (now - ts >= DEDUPE_MS) lastSent.delete(k)
+  } else if (lastSent.size > 500) {
+    for (const [k, ts] of lastSent) if (now - ts >= DEDUPE_MS) lastSent.delete(k)
   }
   const last = lastSent.get(key)
   if (last && now - last < DEDUPE_MS) return false

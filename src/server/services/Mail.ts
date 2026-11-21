@@ -690,16 +690,23 @@ export class Mail extends Context.Service<Mail, {
       const loadAgentFor = (inbox: InboxRow) =>
         db.use((d) => d.select().from(agents).where(eq(agents.id, inbox.agentId)).limit(1)).pipe(Effect.map((rows) => rows[0]!))
 
+      const attachmentCountOf = (messageId: string) =>
+        db.use((d) => d.select({ n: count() }).from(attachments).where(eq(attachments.messageId, messageId))).pipe(Effect.map((r) => r[0]?.n ?? 0))
+
+      const escapeLike = (value: string) => value.replace(/[\\%_]/g, "\\$&")
+
       const notifyHeld = (row: MessageRow, reason: string) =>
         Effect.gen(function* () {
           yield* events.publish({ type: "message.status", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
           const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, row.inboxId)))
-          if (inbox)
+          if (inbox) {
+            const attachmentCount = yield* attachmentCountOf(row.id)
             yield* webhooks.enqueue(inbox.agentId, "message.held", {
               inbox: { id: inbox.id, address: inbox.address },
-              message: toMessageSummary(row, 0),
+              message: toMessageSummary(row, attachmentCount),
               reason
             })
+          }
         })
 
       const cleanHeaders = (input: Record<string, string> | undefined, trusted: Record<string, string> | undefined) =>
@@ -1148,11 +1155,12 @@ export class Mail extends Context.Service<Mail, {
             if (!Number.isNaN(since.getTime())) conditions.push(gt(messages.createdAt, since))
           }
           if (filters.q?.trim()) {
-            const pattern = `%${filters.q.trim().replace(/[%_]/g, "\\$&")}%`
+            const pattern = `%${escapeLike(filters.q.trim())}%`
             conditions.push(
               or(
                 ilike(messages.subject, pattern),
                 ilike(messages.text, pattern),
+                ilike(messages.safeText, pattern),
                 ilike(messages.fromAddress, pattern),
                 ilike(messages.fromName, pattern),
                 sql`${messages.to}::text ilike ${pattern}`
@@ -1350,16 +1358,26 @@ export class Mail extends Context.Service<Mail, {
           const row = yield* db
             .transaction(
               Effect.gen(function* () {
+                const nextSubject = set.subject ?? current.subject
                 if (move?.newThreadId) {
                   const threadId = move.newThreadId
-                  yield* db.use((d) => d.insert(threads).values({ id: threadId, userId: current.userId, inboxId: move.inboxId, subject: current.subject }))
+                  yield* db.use((d) => d.insert(threads).values({ id: threadId, userId: current.userId, inboxId: move.inboxId, subject: nextSubject }))
                 }
                 const locked = yield* transition(messageId, ["draft"], Object.keys(set).length ? set : { status: "draft" })
                 if (!locked) {
                   if (move?.newThreadId) yield* db.use((d) => d.delete(threads).where(eq(threads.id, move.newThreadId!)))
                   return null
                 }
-                if (move && !move.newThreadId) yield* db.use((d) => d.update(threads).set({ inboxId: move.inboxId }).where(eq(threads.id, current.threadId)))
+                if (move && !move.newThreadId) {
+                  yield* db.use((d) => d.update(threads).set({ inboxId: move.inboxId, subject: nextSubject }).where(eq(threads.id, current.threadId)))
+                } else if (!move && set.subject !== undefined) {
+                  const [others] = yield* db.use((d) =>
+                    d.select({ n: count() }).from(messages).where(and(eq(messages.threadId, current.threadId), sql`${messages.id} <> ${current.id}`))
+                  )
+                  if ((others?.n ?? 0) === 0) {
+                    yield* db.use((d) => d.update(threads).set({ subject: nextSubject }).where(eq(threads.id, current.threadId)))
+                  }
+                }
                 if (prepared) {
                   yield* db.use((d) => d.delete(attachments).where(eq(attachments.messageId, current.id)))
                   if (prepared.rows.length) yield* db.use((d) => d.insert(attachments).values(prepared.rows))
@@ -1440,7 +1458,10 @@ export class Mail extends Context.Service<Mail, {
           })
           if (!row) return yield* new Conflict({ message: "This message was already decided." })
           const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, row.inboxId)))
-          if (inbox) yield* webhooks.enqueue(inbox.agentId, "message.approved", { inbox: { id: inbox.id, address: inbox.address }, message: toMessageSummary(row, 0) })
+          if (inbox) {
+            const attachmentCount = yield* attachmentCountOf(row.id)
+            yield* webhooks.enqueue(inbox.agentId, "message.approved", { inbox: { id: inbox.id, address: inbox.address }, message: toMessageSummary(row, attachmentCount) })
+          }
           if (!scheduled) return yield* dispatch(row)
           yield* events.publish({ type: "message.status", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
           return yield* fullMessage(row)
@@ -1458,12 +1479,14 @@ export class Mail extends Context.Service<Mail, {
           if (!row) return yield* new Conflict({ message: "This message was already decided." })
           yield* events.publish({ type: "message.status", userId: row.userId, inboxId: row.inboxId, messageId: row.id, threadId: row.threadId })
           const [inbox] = yield* db.use((d) => d.select().from(inboxes).where(eq(inboxes.id, row.inboxId)))
-          if (inbox)
+          if (inbox) {
+            const attachmentCount = yield* attachmentCountOf(row.id)
             yield* webhooks.enqueue(inbox.agentId, "message.rejected", {
               inbox: { id: inbox.id, address: inbox.address },
-              message: toMessageSummary(row, 0),
+              message: toMessageSummary(row, attachmentCount),
               reason: reason ?? null
             })
+          }
           return yield* fullMessage(row)
         }),
 
@@ -1555,8 +1578,8 @@ export class Mail extends Context.Service<Mail, {
                     eq(messages.direction, "inbound"),
                     gt(messages.createdAt, since),
                     inbox ? eq(messages.inboxId, inbox.id) : undefined,
-                    options.from ? ilike(messages.fromAddress, `%${options.from}%`) : undefined,
-                    options.subject ? ilike(messages.subject, `%${options.subject}%`) : undefined
+                    options.from ? ilike(messages.fromAddress, `%${escapeLike(options.from)}%`) : undefined,
+                    options.subject ? ilike(messages.subject, `%${escapeLike(options.subject)}%`) : undefined
                   )
                 )
                 .orderBy(asc(messages.createdAt))
@@ -1648,9 +1671,10 @@ export class Mail extends Context.Service<Mail, {
             }
             // The webhook still fires for every event, so an agent hears about each recipient.
             if (inbox) {
+              const attachmentCount = yield* attachmentCountOf(row.id)
               yield* webhooks.enqueue(inbox.agentId, `message.${event}`, {
                 inbox: { id: inbox.id, address: inbox.address },
-                message: toMessageSummary(updated ?? row, 0),
+                message: toMessageSummary(updated ?? row, attachmentCount),
                 detail
               })
             }

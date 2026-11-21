@@ -8,7 +8,7 @@ import { Agents } from "../services/Agents"
 import { Domains } from "../services/Domains"
 import { Mail } from "../services/Mail"
 import { Signups } from "../services/Signups"
-import { Storage } from "../services/Storage"
+import { Storage, contentDisposition } from "../services/Storage"
 import { Webhooks } from "../services/Webhooks"
 import { Reputation, REPUTATION } from "../services/Reputation"
 import { Db } from "../services/Db"
@@ -178,7 +178,7 @@ const MessagesHandlers = HttpApiBuilder.group(
           return HttpServerResponse.uint8Array(new Uint8Array(file.content ?? Buffer.alloc(0)), {
             contentType: safeInline ? file.contentType : "application/octet-stream",
             headers: {
-              "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+              "content-disposition": contentDisposition(file.filename, inline),
               "cache-control": "private, max-age=3600",
               "x-content-type-options": "nosniff",
               ...(file.contentType.toLowerCase() === "application/pdf" ? {} : { "content-security-policy": "default-src 'none'; img-src 'self' data:; sandbox" })

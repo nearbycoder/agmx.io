@@ -39,32 +39,43 @@ export const useLiveMail = (enabled = true) => {
   useEffect(() => {
     if (!enabled || typeof EventSource === "undefined") return
     let source: EventSource | null = null
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+    let flushTimer: ReturnType<typeof setTimeout> | undefined
+    let arrivalTimer: ReturnType<typeof setTimeout> | undefined
     let pending = false
+    let disposed = false
     const flush = () => {
       pending = false
+      flushTimer = undefined
+      if (disposed) return
       void queryClient.invalidateQueries({ queryKey: ["messages"] })
       void queryClient.invalidateQueries({ queryKey: ["thread"] })
+      void queryClient.invalidateQueries({ queryKey: ["approvals"] })
       void queryClient.invalidateQueries({ queryKey: qk.inboxes })
       void queryClient.invalidateQueries({ queryKey: qk.agents })
       void queryClient.invalidateQueries({ queryKey: qk.me })
     }
     // Several messages arriving together (a forward rule, a batch) get one toast, not a stack.
     let arrivals: Array<string> = []
-    let arrivalTimer: ReturnType<typeof setTimeout> | undefined
     const announce = () => {
+      arrivalTimer = undefined
+      if (disposed) return
       const ids = arrivals
       arrivals = []
+      if (ids.length === 0) return
       if (ids.length > 1) {
-        toast(`${ids.length} new messages`, { icon: "✉️" })
+        toast(`${ids.length} new messages`)
         return
       }
       void api((c) => c.messages.get({ params: { messageId: ids[0]! }, query: {} }))
-        .then((m) => toast(m.from.name || m.from.address, { description: m.subject || m.snippet || "New message", icon: "✉️" }))
+        .then((m) => {
+          if (!disposed) toast(m.from.name || m.from.address, { description: m.subject || m.snippet || "New message" })
+        })
         .catch(() => {})
     }
     let wasConnected = false
     const connect = () => {
+      if (disposed) return
       source = new EventSource("/api/events")
       source.onopen = () => {
         // Anything that happened while the stream was down was missed, so catch up once.
@@ -72,6 +83,7 @@ export const useLiveMail = (enabled = true) => {
         wasConnected = true
       }
       source.addEventListener("mail", (event) => {
+        if (disposed) return
         try {
           const data = JSON.parse((event as MessageEvent).data) as { type: string; messageId: string }
           if (data.type === "message.received") {
@@ -82,18 +94,20 @@ export const useLiveMail = (enabled = true) => {
         } catch {}
         if (!pending) {
           pending = true
-          setTimeout(flush, 150)
+          flushTimer = setTimeout(flush, 150)
         }
       })
       source.onerror = () => {
         source?.close()
-        timer = setTimeout(connect, 5000)
+        if (!disposed) reconnectTimer = setTimeout(connect, 5000)
       }
     }
     connect()
     return () => {
+      disposed = true
       source?.close()
-      if (timer) clearTimeout(timer)
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (flushTimer) clearTimeout(flushTimer)
       if (arrivalTimer) clearTimeout(arrivalTimer)
     }
   }, [enabled, queryClient])

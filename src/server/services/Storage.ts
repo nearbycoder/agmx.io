@@ -3,6 +3,14 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Context, Effect, Layer } from "effect"
 import { env } from "../env"
 
+/** RFC 5987 Content-Disposition value with a safe ASCII fallback. */
+export const contentDisposition = (filename: string, inline: boolean) => {
+  const clean = filename.replace(/[\r\n\0]+/g, " ").trim() || "attachment"
+  const fallback = clean.replace(/["\\]/g, "_").replace(/[^\x20-\x7e]/g, "_")
+  const encoded = encodeURIComponent(clean).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+  return `${inline ? "inline" : "attachment"}; filename="${fallback}"; filename*=UTF-8''${encoded}`
+}
+
 /**
  * Attachment byte storage. With the `s3` driver files live in an S3-compatible
  * bucket and are downloaded through short-lived signed URLs, so large files
@@ -80,7 +88,7 @@ export class Storage extends Context.Service<Storage, {
               Bucket: bucket,
               Key: key,
               ResponseContentType: contentType,
-              ResponseContentDisposition: `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
+              ResponseContentDisposition: contentDisposition(filename, inline),
               ResponseCacheControl: "private, max-age=300"
             }),
             { expiresIn: 300 }

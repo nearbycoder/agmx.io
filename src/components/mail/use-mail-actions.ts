@@ -110,12 +110,12 @@ export const matchesFolder = (m: MessageSummaryT, folder: string) => {
     case "pending":
       return m.status === "pending_approval" || m.status === "rejected"
     case "starred":
-      return m.isStarred && m.status !== "draft"
+      return m.isStarred && !UNSENT.has(m.status)
     case "archived":
-      return m.isArchived && m.status !== "draft"
+      return m.isArchived && !UNSENT.has(m.status)
     case "spam":
-      return m.isSpam
+      return m.isSpam && !UNSENT.has(m.status)
     default:
-      return m.status !== "draft"
+      return !UNSENT.has(m.status)
   }
 }

@@ -95,6 +95,36 @@ describe("agents, inboxes and mail", () => {
     expect(peek.status).toBe(404)
     const create = await call("POST", "/agents", { name: "Nope" }, scout.key)
     expect(create.body._tag).toBe("Forbidden")
+    expect((await call("GET", "/domains", undefined, scout.key)).status).toBe(403)
+  })
+
+  it("searches HTML-only email bodies via safeText and updates draft thread subjects", async () => {
+    const { runtime } = await import("~/server/runtime")
+    const { Mail } = await import("~/server/services/Mail")
+    const raw = Buffer.from(
+      [
+        "From: Billing <billing@example.com>",
+        "To: scout@agmx.test",
+        "Subject: Statement",
+        "Message-ID: <html-only-search@example.com>",
+        "MIME-Version: 1.0",
+        "Content-Type: text/html; charset=utf-8",
+        "",
+        "<p>Your unique quarterly reference is <strong>QRT-9941-ZEBRA</strong>.</p>"
+      ].join("\r\n")
+    )
+    await runtime.runPromise(Effect.flatMap(Effect.service(Mail), (m) => m.ingestRaw(raw, ["scout@agmx.test"], { dmarc: "PASS" })))
+    const found = await call("GET", "/messages?q=QRT-9941-ZEBRA", undefined, scout.key)
+    expect(found.status).toBe(200)
+    expect(found.body.messages.length).toBeGreaterThanOrEqual(1)
+
+    const draft = await call("POST", "/drafts", { to: "someone@example.com", subject: "Initial draft", text: "Hello" }, scout.key)
+    expect(draft.status).toBe(200)
+    const updated = await call("PATCH", `/drafts/${draft.body.id}`, { subject: "Renamed draft" }, scout.key)
+    expect(updated.status).toBe(200)
+    const thread = await call("GET", `/threads/${draft.body.threadId}`, undefined, scout.key)
+    expect(thread.body.subject).toBe("Renamed draft")
+    await call("DELETE", `/drafts/${draft.body.id}`, undefined, scout.key)
   })
 
   it("delivers internally, threads replies and extracts codes", async () => {
@@ -243,5 +273,35 @@ describe("attachment storage cleanup", () => {
     const [queued] = await pg`select key from storage_deletions where key = 'attachments/test/key'`
     expect(queued?.key).toBe("attachments/test/key")
     await pg.end()
+  })
+})
+
+describe("mcp server", () => {
+  it("lists all 22 tools with object schemas and surfaces tagged errors", async () => {
+    const [{ runtime }, { Agents }, { handleRpc }] = await Promise.all([
+      import("~/server/runtime"),
+      import("~/server/services/Agents"),
+      import("~/server/mcp")
+    ])
+    const principal = await runtime.runPromise(Effect.flatMap(Effect.service(Agents), (a) => a.authenticate(ownerKey)))
+    expect(principal).not.toBeNull()
+
+    const init = (await runtime.runPromise(handleRpc(principal!, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }))) as {
+      result: { protocolVersion: string; serverInfo: { name: string } }
+    }
+    expect(init.result.protocolVersion).toBe("2025-06-18")
+    expect(init.result.serverInfo.name).toBe("agmx")
+
+    const listed = (await runtime.runPromise(handleRpc(principal!, { jsonrpc: "2.0", id: 2, method: "tools/list" }))) as {
+      result: { tools: Array<{ name: string; inputSchema: { type: string } }> }
+    }
+    expect(listed.result.tools).toHaveLength(22)
+    for (const t of listed.result.tools) expect(t.inputSchema.type).toBe("object")
+
+    const missing = (await runtime.runPromise(
+      handleRpc(principal!, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "get_message", arguments: { messageId: "msg_does_not_exist" } } })
+    )) as { result: { isError: boolean; content: Array<{ text: string }> } }
+    expect(missing.result.isError).toBe(true)
+    expect(JSON.parse(missing.result.content[0]!.text)).toMatchObject({ _tag: "NotFound", error: "NotFound" })
   })
 })

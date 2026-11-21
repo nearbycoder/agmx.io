@@ -35,7 +35,8 @@ export const CreateAgentDialog = ({ open, onOpenChange }: { open: boolean; onOpe
   const domainOptions = [...(me?.operatorDomain ? [me.operatorDomain] : []), ...verifiedDomains.map((d) => d.name)]
   const selectedDomain = domain || mailDomain
   const problem = usernameProblem(username, selectedDomain === mailDomain)
-  const suggested = normalizeUsername(name).replace(/[^a-z0-9._-]/g, "").slice(0, 32)
+  const rawSuggested = normalizeUsername(name).replace(/[^a-z0-9._-]/g, "").slice(0, 32)
+  const suggested = rawSuggested && usernameProblem(rawSuggested, selectedDomain === mailDomain) === null ? rawSuggested : ""
 
   useEffect(() => {
     if (!open) {

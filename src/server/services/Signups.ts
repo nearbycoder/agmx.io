@@ -180,13 +180,16 @@ export class Signups extends Context.Service<Signups, {
           yield* requirePending(row)
           const result = yield* db.transaction(
             Effect.gen(function* () {
-              const created = yield* agents.createForUser(principal.userId, {
-                name: row.agentName,
-                description: row.description,
-                username: input.username ?? row.requestedUsername ?? undefined,
-                domain: input.domain,
-                createApiKey: true
-              })
+              const created = yield* agents.createForUser(
+                principal.userId,
+                {
+                  name: row.agentName,
+                  description: row.description,
+                  username: input.username ?? row.requestedUsername ?? undefined,
+                  domain: input.domain
+                },
+                { createInbox: true }
+              )
               const updated = yield* db.use((d) =>
                 d
                   .update(agentSignups)

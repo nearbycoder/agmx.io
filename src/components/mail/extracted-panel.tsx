@@ -9,6 +9,7 @@ type Extracted = MessageT["extracted"]
 type CalendarEvent = Extracted["events"][number]
 
 const CARRIER: Record<string, string> = { ups: "UPS", fedex: "FedEx", usps: "USPS", dhl: "DHL", other: "Package" }
+const isHttpUrl = (value: string) => /^https?:\/\//i.test(value)
 
 /** "2026-12-01" (all-day) or an ISO instant → Date in local time. */
 const toDate = (value: string, allDay: boolean) => {
@@ -119,7 +120,7 @@ export function ExtractedPanel({ extracted }: { extracted: Extracted }) {
                   {event.location ? (
                     <span className="inline-flex min-w-0 items-center gap-1">
                       <MapPin className="size-3 shrink-0" />
-                      {/^https?:\/\//.test(event.location) ? (
+                      {isHttpUrl(event.location) ? (
                         <a href={event.location} target="_blank" rel="noreferrer noopener" className="truncate underline decoration-line-strong underline-offset-2 hover:text-ink">
                           {event.location}
                         </a>
@@ -136,7 +137,7 @@ export function ExtractedPanel({ extracted }: { extracted: Extracted }) {
                   ) : null}
                 </div>
               ) : null}
-              {event.url ? (
+              {event.url && isHttpUrl(event.url) ? (
                 <div className="mt-2">
                   <LinkButton href={event.url} icon={<Link2 />}>
                     Event link
@@ -221,6 +222,7 @@ function Section({ icon, label, children }: { icon: ReactNode; label: string; ch
 }
 
 function LinkButton({ href, icon, children }: { href: string; icon: ReactNode; children: ReactNode }) {
+  if (!isHttpUrl(href)) return null
   return (
     <a
       href={href}

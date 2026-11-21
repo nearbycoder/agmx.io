@@ -50,14 +50,15 @@ const { codes, links, events, receipt, tracking } = message.extracted
 
 | Namespace | Methods |
 | --- | --- |
-| root | `me()`, `usage(days)`, `waitForCode()`, `Agmx.signup()` |
+| root | `me()`, `usage(days)`, `exportData()`, `waitForCode()`, `Agmx.signup()` |
 | `inboxes` | `list`, `create`, `get`, `update`, `delete` |
 | `messages` | `list`, `get`, `send`, `reply`, `forward`, `update`, `delete`, `wait`, `cancel`, `attachment` |
 | `threads` | `list`, `get` |
 | `drafts` | `list`, `create`, `update`, `delete`, `send` |
 | `approvals` | `list`, `approve`, `reject` (humans and account keys) |
 | `rules` | `list`, `create`, `update`, `delete` |
-| `agents`, `domains`, `apiKeys` | CRUD |
+| `agents` | `list`, `create`, `get`, `update`, `delete`, `rotateWebhookSecret`, `testWebhook`, `webhookDeliveries`, `reputation`, `pauseSending`, `resumeSending` |
+| `domains`, `apiKeys` | CRUD |
 
 Errors throw `AgmxError` with `tag` (`"QuotaExceeded"`, `"NotFound"`, …), `status` and the full `body`.
 

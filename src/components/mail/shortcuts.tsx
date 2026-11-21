@@ -31,6 +31,7 @@ export const SHORTCUTS: Array<{ group: string; items: Array<[string[], string]> 
     group: "Compose",
     items: [
       [["⌘", "↵"], "Send"],
+      [["⌘", "S"], "Save draft"],
       [["esc"], "Close composer"]
     ]
   }

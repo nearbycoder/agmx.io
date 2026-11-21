@@ -10,12 +10,24 @@ import { Button } from "~/components/ui/button"
 import { ConfirmDialog } from "~/components/ui/dialog"
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from "~/components/ui/menu"
 import { api, ApiFailure } from "~/lib/api"
-import { qk, useAgents } from "~/lib/queries"
+import { qk, useAgents, useMe } from "~/lib/queries"
 import { cn, formatBytes, modKey } from "~/lib/utils"
 import { formatWhen } from "~/components/mail/queries"
 import { useCompose, type ComposeDraft } from "./compose-context"
 
-const MAX_TOTAL_BYTES = 10 * 1024 * 1024
+const DEFAULT_MAX_MB = 10
+
+interface Recipients {
+  to: Array<string>
+  cc: Array<string>
+  bcc: Array<string>
+}
+
+const mergeRecipients = (values: Array<string>, raw: string) => {
+  const parts = splitRecipients(raw)
+  if (!parts.length) return values
+  return [...values, ...parts.filter((p) => !values.includes(p))]
+}
 
 interface FileDraft {
   id: string
@@ -84,7 +96,10 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const currentInbox = useRouterState({ select: (s) => (s.location.search as { inbox?: string }).inbox })
+  const { data: me } = useMe()
   const { data: agents } = useAgents()
+  const maxMessageMb = me?.plan.maxMessageMb ?? DEFAULT_MAX_MB
+  const maxTotalBytes = maxMessageMb * 1024 * 1024
   const inboxes = useMemo(() => (agents ?? []).flatMap((a) => a.inboxes.map((i) => ({ ...i, agent: a }))), [agents])
   // Saved drafts always edit as a full message; their thread and headers are kept server-side.
   const mode = draft.draftId ? "new" : (draft.replyTo?.mode ?? "new")
@@ -97,6 +112,9 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   const [to, setTo] = useState<Array<string>>(isReply ? [] : splitRecipients(draft.to))
   const [cc, setCc] = useState<Array<string>>(splitRecipients(draft.cc))
   const [bcc, setBcc] = useState<Array<string>>(splitRecipients(draft.bcc))
+  const [toText, setToText] = useState("")
+  const [ccText, setCcText] = useState("")
+  const [bccText, setBccText] = useState("")
   const [showCc, setShowCc] = useState(Boolean(draft.cc))
   const [showBcc, setShowBcc] = useState(Boolean(draft.bcc))
   const [subject, setSubject] = useState(
@@ -141,6 +159,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   const dirty =
     body.trim() !== (draft.text ?? "").trim() ||
     files.length > 0 ||
+    Boolean(toText.trim() || ccText.trim() || bccText.trim()) ||
     (!draft.replyTo &&
       (subject !== (draft.subject ?? "") ||
         to.join() !== splitRecipients(draft.to).join() ||
@@ -189,14 +208,34 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
     return list.length ? list : undefined
   }
 
+  /** Commit any recipient currently typed into To/Cc/Bcc and return the resolved lists synchronously. */
+  const flushRecipients = (): Recipients => {
+    const nextTo = mergeRecipients(to, toText)
+    const nextCc = mergeRecipients(cc, ccText)
+    const nextBcc = mergeRecipients(bcc, bccText)
+    if (toText.trim()) {
+      setTo(nextTo)
+      setToText("")
+    }
+    if (ccText.trim()) {
+      setCc(nextCc)
+      setCcText("")
+    }
+    if (bccText.trim()) {
+      setBcc(nextBcc)
+      setBccText("")
+    }
+    return { to: nextTo, cc: nextCc, bcc: nextBcc }
+  }
+
   /** The editable fields of a saved draft, as the drafts API expects them. */
-  const draftFields = () => ({ from, to, cc, bcc, subject, text: body, attachments: attachmentPayload() })
+  const draftFields = (r: Recipients) => ({ from, to: r.to, cc: r.cc, bcc: r.bcc, subject, text: body, attachments: attachmentPayload() })
 
   const send = useMutation({
-    mutationFn: async (sendAt: string | undefined) => {
+    mutationFn: async ({ sendAt, recipients }: { sendAt: string | undefined; recipients: Recipients }) => {
       if (draft.draftId) {
         const id = draft.draftId
-        await api((c) => c.drafts.update({ params: { messageId: id }, payload: draftFields() }))
+        await api((c) => c.drafts.update({ params: { messageId: id }, payload: draftFields(recipients) }))
         return api((c) => c.drafts.send({ params: { messageId: id }, payload: { sendAt } }))
       }
       if (draft.replyTo && isReply) {
@@ -208,15 +247,17 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
         )
       }
       if (draft.replyTo && mode === "forward") {
-        return api((c) => c.messages.forward({ params: { messageId: draft.replyTo!.messageId }, payload: { to, text: body || undefined, sendAt, idempotencyKey } }))
+        return api((c) =>
+          c.messages.forward({ params: { messageId: draft.replyTo!.messageId }, payload: { to: recipients.to, text: body || undefined, sendAt, idempotencyKey } })
+        )
       }
       return api((c) =>
         c.messages.send({
           payload: {
             from,
-            to,
-            cc: cc.length ? cc : undefined,
-            bcc: bcc.length ? bcc : undefined,
+            to: recipients.to,
+            cc: recipients.cc.length ? recipients.cc : undefined,
+            bcc: recipients.bcc.length ? recipients.bcc : undefined,
             subject,
             text: body,
             attachments: attachmentPayload(),
@@ -243,10 +284,10 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   })
 
   const saveDraft = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (recipients: Recipients) => {
       if (draft.draftId) {
         const id = draft.draftId
-        return api((c) => c.drafts.update({ params: { messageId: id }, payload: draftFields() }))
+        return api((c) => c.drafts.update({ params: { messageId: id }, payload: draftFields(recipients) }))
       }
       if (draft.replyTo && isReply) {
         return api((c) =>
@@ -254,7 +295,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
         )
       }
       return api((c) =>
-        c.drafts.create({ payload: { from: from || undefined, to, cc, bcc, subject, text: body, attachments: attachmentPayload() } })
+        c.drafts.create({ payload: { from: from || undefined, to: recipients.to, cc: recipients.cc, bcc: recipients.bcc, subject, text: body, attachments: attachmentPayload() } })
       )
     },
     onSuccess: () => {
@@ -271,11 +312,11 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
 
   const busy = send.isPending || saveDraft.isPending
 
-  const validate = () => {
+  const validate = (recipients: Recipients) => {
     setError(null)
     if (!isReply) {
-      const all = [...to, ...cc, ...bcc]
-      if (to.length === 0) return setError("Add at least one recipient."), false
+      const all = [...recipients.to, ...recipients.cc, ...recipients.bcc]
+      if (recipients.to.length === 0) return setError("Add at least one recipient."), false
       const bad = all.filter((r) => !parseAddress(r))
       if (bad.length) return setError(`Invalid address: ${bad.join(", ")}`), false
     }
@@ -285,11 +326,18 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
   }
 
   const submit = (sendAt?: Date) => {
-    if (busy || !validate()) return
+    if (busy) return
+    const recipients = flushRecipients()
+    if (!validate(recipients)) return
     if (sendAt && Number.isNaN(sendAt.getTime())) return setError("Pick a date and time to send at.")
     if (sendAt && sendAt.getTime() <= Date.now() + 30_000) return setError("Pick a time in the future.")
     setPicking(false)
-    send.mutate(sendAt?.toISOString())
+    send.mutate({ sendAt: sendAt?.toISOString(), recipients })
+  }
+
+  const triggerSaveDraft = () => {
+    if (busy) return
+    saveDraft.mutate(flushRecipients())
   }
 
   // While a send or save is in flight the composer stays put: closing it now would hide a failure
@@ -312,7 +360,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
       submit(picking ? new Date(customAt) : undefined)
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s" && canSaveDraft) {
       e.preventDefault()
-      if (!busy) saveDraft.mutate()
+      triggerSaveDraft()
     } else if (e.key === "Escape" && !confirmDiscard) {
       e.preventDefault()
       e.stopPropagation()
@@ -324,8 +372,8 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
     if (!list) return
     const incoming = [...list]
     const size = incoming.reduce((s, f) => s + f.size, totalBytes)
-    if (size > MAX_TOTAL_BYTES) {
-      setError(`Attachments can total at most ${formatBytes(MAX_TOTAL_BYTES)}.`)
+    if (size > maxTotalBytes) {
+      setError(`Attachments can total at most ${formatBytes(maxTotalBytes)}.`)
       return
     }
     const next = await Promise.all(
@@ -454,16 +502,16 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
                       ) : null
                     }
                   >
-                    <RecipientInput label="To" inputRef={toRef} values={to} onChange={setTo} placeholder="name@example.com" />
+                    <RecipientInput label="To" inputRef={toRef} values={to} onChange={setTo} text={toText} onTextChange={setToText} placeholder="name@example.com" />
                   </Row>
                   {showCc ? (
                     <Row label="Cc">
-                      <RecipientInput label="Cc" values={cc} onChange={setCc} autoFocus />
+                      <RecipientInput label="Cc" values={cc} onChange={setCc} text={ccText} onTextChange={setCcText} autoFocus />
                     </Row>
                   ) : null}
                   {showBcc ? (
                     <Row label="Bcc">
-                      <RecipientInput label="Bcc" values={bcc} onChange={setBcc} autoFocus />
+                      <RecipientInput label="Bcc" values={bcc} onChange={setBcc} text={bccText} onTextChange={setBccText} autoFocus />
                     </Row>
                   ) : null}
                 </>
@@ -613,13 +661,13 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
               ) : null}
               {canSaveDraft ? (
                 <Tooltip content={<span className="flex items-center gap-1.5">Save draft<span className="font-mono text-[11px] opacity-60">{modKey() === "⌘" ? "⌘S" : "Ctrl S"}</span></span>}>
-                  <Button variant="ghost" size="icon-sm" onClick={() => saveDraft.mutate()} loading={saveDraft.isPending} aria-label="Save draft" disabled={send.isPending}>
+                  <Button variant="ghost" size="icon-sm" onClick={triggerSaveDraft} loading={saveDraft.isPending} aria-label="Save draft" disabled={send.isPending}>
                     {saveDraft.isPending ? null : <Save />}
                   </Button>
                 </Tooltip>
               ) : null}
               <input ref={fileInput} type="file" multiple className="hidden" onChange={(e) => void addFiles(e.target.files).then(() => (e.target.value = ""))} />
-              {files.length ? <span className="text-[12px] text-muted tabular-nums">{formatBytes(totalBytes)} of 10 MB</span> : null}
+              {files.length ? <span className="text-[12px] text-muted tabular-nums">{formatBytes(totalBytes)} of {maxMessageMb} MB</span> : null}
               <span className="ml-auto" />
               <Tooltip content="Discard">
                 <Button variant="ghost" size="icon-sm" onClick={requestClose} aria-label="Discard draft">
@@ -636,7 +684,7 @@ function ComposePanel({ draft, onClose }: { draft: ComposeDraft; onClose: () => 
           onOpenChange={dismissConfirm}
           saving={saveDraft.isPending}
           existing={Boolean(draft.draftId)}
-          onSave={() => saveDraft.mutate()}
+          onSave={triggerSaveDraft}
           onDiscard={() => {
             setConfirmDiscard(false)
             onClose()
@@ -723,6 +771,8 @@ function RecipientInput({
   label,
   values,
   onChange,
+  text,
+  onTextChange,
   placeholder,
   autoFocus,
   inputRef
@@ -730,16 +780,17 @@ function RecipientInput({
   label: string
   values: Array<string>
   onChange: (v: Array<string>) => void
+  text: string
+  onTextChange: (t: string) => void
   placeholder?: string
   autoFocus?: boolean
   inputRef?: React.RefObject<HTMLInputElement | null>
 }) {
-  const [text, setText] = useState("")
   const commit = (raw: string) => {
-    const parts = splitRecipients(raw)
-    if (!parts.length) return
-    onChange([...values, ...parts.filter((p) => !values.includes(p))])
-    setText("")
+    const next = mergeRecipients(values, raw)
+    if (next === values) return
+    onChange(next)
+    onTextChange("")
   }
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 py-1.5">
@@ -769,12 +820,14 @@ function RecipientInput({
         onChange={(e) => {
           const v = e.target.value
           if (/[,;]\s*$/.test(v)) commit(v)
-          else setText(v)
+          else onTextChange(v)
         }}
         onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === "Tab") && text.trim()) {
-            e.preventDefault()
-            commit(text)
+          if ((e.key === "Enter" && !e.metaKey && !e.ctrlKey) || e.key === "Tab") {
+            if (text.trim()) {
+              e.preventDefault()
+              commit(text)
+            }
           } else if (e.key === "Backspace" && !text && values.length) {
             onChange(values.slice(0, -1))
           }

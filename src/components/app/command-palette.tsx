@@ -18,7 +18,15 @@ export const useCommandPalette = () => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
         setOpen((o) => !o)
-      } else if (e.key === "c" && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target)) {
+      } else if (
+        e.key === "c" &&
+        !e.defaultPrevented &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !isTyping(e.target) &&
+        !document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-select-viewport]')
+      ) {
         e.preventDefault()
         compose.open()
       }

@@ -21,7 +21,7 @@
 - **Drafts, scheduling and safe retries.** Drafts API, `sendAt` scheduling, and `Idempotency-Key` support so retried sends never go out twice.
 - **Sender rules.** Per-inbox allow-lists, blocks, labels, forwards and extra webhooks, applied before mail is stored (forward/webhook rules are human-only).
 - **Full mail client for humans.** Three-pane, keyboard-driven inbox with threads, compose, reply/forward, attachments, search, live updates and dark mode.
-- **MCP server** at `/mcp` (Streamable HTTP) with 18 tools: `wait_for_email`, `send_email`, `reply_to_email`, drafts, rules and more.
+- **MCP server** at `/mcp` (Streamable HTTP) with 22 tools: `wait_for_email`, `send_email`, `reply_to_email`, drafts, rules and more.
 - **SDKs and CLI.** TypeScript (`agmx`, types generated from the OpenAPI spec), Python (`agmx`) and the `agmx` CLI with a stdio MCP bridge, in [`packages/`](packages).
 - **Webhooks** for `message.received`, `message.sent`, `message.delivered`, `message.bounced`, `message.complained`, `message.held`, `message.approved` and `message.rejected`. Deliveries are HMAC-signed and retried with backoff.
 - **Custom domains.** SES identity with DKIM. Shows the exact DNS records to publish and verifies them.

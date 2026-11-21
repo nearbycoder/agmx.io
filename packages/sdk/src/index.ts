@@ -25,8 +25,10 @@ type Input<T> = { [P in keyof T]?: T[P] | undefined } & { [P in keyof T as null 
 
 export type Me = Ok<"account.me">
 export type UsageSeries = Ok<"account.usage">
+export type AccountExport = Ok<"account.exportData">
 export type Agent = Ok<"agents.update">
 export type AgentWithSecret = Ok<"agents.get">
+export type AgentReputation = Ok<"agents.reputation">
 export type CreateAgentResult = Ok<"agents.create">
 export type Inbox = Ok<"inboxes.get">
 export type Message = Ok<"messages.get">
@@ -68,6 +70,7 @@ export type AgmxErrorTag =
   | "Conflict"
   | "InvalidRequest"
   | "QuotaExceeded"
+  | "RateLimited"
   | "DeliveryFailed"
   | "NetworkError"
   | "HttpError"
@@ -117,11 +120,16 @@ const randomId = () => {
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, ms)
-    signal?.addEventListener("abort", () => {
+    if (signal?.aborted) return reject(new AgmxError("Timeout", "Aborted"))
+    const onAbort = () => {
       clearTimeout(timer)
       reject(new AgmxError("Timeout", "Aborted"))
-    })
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener("abort", onAbort, { once: true })
   })
 
 const enc = encodeURIComponent
@@ -169,6 +177,11 @@ export class Agmx {
     return this.request("GET", "/usage", { query: { days } })
   }
 
+  /** Export all account metadata, messages and usage as JSON. Account keys only. */
+  exportData(): Promise<AccountExport> {
+    return this.request("GET", "/account/export")
+  }
+
   // -------------------------------------------------------------------------
   // Agents
   // -------------------------------------------------------------------------
@@ -181,7 +194,11 @@ export class Agmx {
     delete: (agentId: string): Promise<{ ok: boolean }> => this.request("DELETE", `/agents/${enc(agentId)}`),
     rotateWebhookSecret: (agentId: string): Promise<AgentWithSecret> => this.request("POST", `/agents/${enc(agentId)}/webhook-secret`),
     testWebhook: (agentId: string): Promise<WebhookDelivery> => this.request("POST", `/agents/${enc(agentId)}/webhook-test`),
-    webhookDeliveries: (agentId: string): Promise<Array<WebhookDelivery>> => this.request("GET", `/agents/${enc(agentId)}/webhook-deliveries`)
+    webhookDeliveries: (agentId: string): Promise<Array<WebhookDelivery>> => this.request("GET", `/agents/${enc(agentId)}/webhook-deliveries`),
+    reputation: (agentId: string): Promise<AgentReputation> => this.request("GET", `/agents/${enc(agentId)}/reputation`),
+    pauseSending: (agentId: string, options: { reason?: string | null } = {}): Promise<AgentReputation> =>
+      this.request("POST", `/agents/${enc(agentId)}/sending/pause`, { body: options }),
+    resumeSending: (agentId: string): Promise<AgentReputation> => this.request("POST", `/agents/${enc(agentId)}/sending/resume`)
   }
 
   // -------------------------------------------------------------------------

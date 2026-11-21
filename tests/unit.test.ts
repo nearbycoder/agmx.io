@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { parseAddress, parseAddressList, subjectKey } from "~/shared/address"
 import { extract } from "~/server/mail/extract"
-import { makeSnippet } from "~/server/mail/compose"
+import { escapeHtml, makeSnippet } from "~/server/mail/compose"
+import { verifySnsSignature } from "~/server/mail/sns"
+import { buttonEmail } from "~/server/system-mail"
+import { contentDisposition } from "~/server/services/Storage"
 import { signPayload } from "~/server/services/Webhooks"
 import { getPlan } from "~/shared/plans"
 import { createHmac } from "node:crypto"
@@ -66,5 +69,48 @@ describe("plans", () => {
   it("falls back to free", () => {
     expect(getPlan("nope").id).toBe("free")
     expect(getPlan("pro").monthlySends).toBe(10_000)
+  })
+})
+
+describe("encoding & system mail safety", () => {
+  it("escapes HTML entities including single quotes", () => {
+    expect(escapeHtml(`<script>alert('x' & "y")</script>`)).toBe("&lt;script&gt;alert(&#39;x&#39; &amp; &quot;y&quot;)&lt;/script&gt;")
+  })
+
+  it("escapes untrusted fields and blocks non-http links in transactional emails", () => {
+    const mail = buttonEmail({
+      heading: `Paused <b>"Scout"</b>`,
+      body: `<img src=x onerror=alert(1)>`,
+      cta: `Review 'now'`,
+      url: "javascript:alert(1)",
+      footer: `Footer <script>`
+    })
+    expect(mail.html).toContain("&lt;b&gt;&quot;Scout&quot;&lt;/b&gt;")
+    expect(mail.html).toContain("&lt;img src=x onerror=alert(1)&gt;")
+    expect(mail.html).toContain("Review &#39;now&#39;")
+    expect(mail.html).not.toContain("javascript:")
+  })
+
+  it("formats RFC 5987 Content-Disposition safely", () => {
+    const cd = contentDisposition(`report (Q4)'s "final"\r\n.pdf`, false)
+    expect(cd).not.toMatch(/[\r\n]/)
+    expect(cd).toContain(`attachment; filename="report (Q4)'s _final_ .pdf"`)
+    expect(cd).toContain("filename*=UTF-8''report%20%28Q4%29%27s%20%22final%22%20.pdf")
+  })
+
+  it("rejects malformed or untrusted SNS cert URLs without throwing", async () => {
+    const base = {
+      Type: "Notification" as const,
+      MessageId: "1",
+      TopicArn: "arn:aws:sns:us-east-1:123:test",
+      Message: "{}",
+      Timestamp: new Date().toISOString(),
+      SignatureVersion: "2" as const,
+      Signature: "AAAA"
+    }
+    expect(await verifySnsSignature({ ...base, SigningCertURL: "not a url" })).toBe(false)
+    expect(await verifySnsSignature({ ...base, SigningCertURL: "http://sns.us-east-1.amazonaws.com/cert.pem" })).toBe(false)
+    expect(await verifySnsSignature({ ...base, SigningCertURL: "https://sns.us-east-1.amazonaws.com:8443/cert.pem" })).toBe(false)
+    expect(await verifySnsSignature({ ...base, SigningCertURL: "https://evil.example/cert.pem" })).toBe(false)
   })
 })
