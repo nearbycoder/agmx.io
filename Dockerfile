@@ -11,7 +11,7 @@ RUN bun run build
 # ---- Migration runtime deps (tiny) -------------------------------------------
 FROM node:24-slim AS migrate-deps
 WORKDIR /migrate
-RUN npm init -y >/dev/null && npm install --omit=dev --no-audit --no-fund drizzle-orm@0.45.4 postgres@4.0.0
+RUN npm init -y >/dev/null && npm install --omit=dev --no-audit --no-fund drizzle-orm@0.45.4 postgres@4.1.1
 
 # ---- Runtime -----------------------------------------------------------------
 FROM node:24-slim AS runtime

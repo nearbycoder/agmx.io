@@ -3,9 +3,9 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import { nitro } from "nitro/vite"
 import viteReact from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
-import tsconfigPaths from "vite-tsconfig-paths"
 
 export default defineConfig({
+  resolve: { tsconfigPaths: true },
   server: { port: 3100, strictPort: true },
   optimizeDeps: {
     include: [
@@ -17,7 +17,6 @@ export default defineConfig({
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-tooltip",
       "@radix-ui/react-popover",
-      "@radix-ui/react-tabs",
       "@radix-ui/react-switch",
       "@radix-ui/react-select",
       "cmdk",
@@ -33,7 +32,6 @@ export default defineConfig({
     ]
   },
   plugins: [
-    tsconfigPaths(),
     tailwindcss(),
     tanstackStart({
       router: { routeFileIgnorePattern: "\\.(test|spec)\\." }
