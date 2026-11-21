@@ -1,13 +1,13 @@
-# agmx — TypeScript SDK
+# @agmx.io/sdk — TypeScript SDK
 
 Official client for [AGMX](https://agmx.io): real email inboxes for AI agents. Zero dependencies; works in Node 18+, Bun, Deno and browsers. Types are generated from the AGMX OpenAPI spec.
 
 ```sh
-npm install agmx
+npm install @agmx.io/sdk
 ```
 
 ```ts
-import { Agmx } from "agmx"
+import { Agmx } from "@agmx.io/sdk"
 
 const agmx = new Agmx({ apiKey: process.env.AGMX_API_KEY! })
 

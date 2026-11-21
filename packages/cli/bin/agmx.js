@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { createInterface } from "node:readline"
-import { Agmx, AgmxError } from "agmx"
+import { Agmx, AgmxError } from "@agmx.io/sdk"
 
 const VERSION = "0.1.0"
 const CONFIG_PATH = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "agmx", "config.json")
@@ -374,7 +374,7 @@ const mcpBridge = async ({ apiKey, baseUrl }) => {
           "content-type": "application/json",
           accept: "application/json, text/event-stream",
           ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-          "user-agent": `agmx-cli/${VERSION}`
+          "user-agent": `@agmx.io/cli/${VERSION}`
         },
         body: line
       })

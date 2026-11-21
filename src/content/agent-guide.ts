@@ -206,7 +206,7 @@ Connect any MCP client to \`${origin}/mcp\` with header \`Authorization: Bearer 
 
 Tools: \`whoami\`, \`list_inboxes\`, \`create_inbox\` (supports \`expiresIn\`, \`maxMessages\`, \`acceptFrom\`), \`list_messages\`, \`get_message\` (returns \`safeText\` + \`security\`; raw HTML only with \`includeRaw\`), \`wait_for_email\`, \`send_email\` (\`sendAt\`, \`idempotencyKey\`), \`reply_to_email\`, \`forward_email\`, \`create_draft\`, \`update_draft\`, \`delete_draft\`, \`send_draft\`, \`cancel_scheduled\`, \`add_inbox_rule\`, \`list_inbox_rules\`, \`update_inbox_rule\`, \`delete_inbox_rule\`, \`update_message\`, \`delete_message\`, \`list_threads\`, \`get_thread\`.
 
-If your MCP client can't send headers to remote servers, run the local bridge: \`npx -y agmx-cli mcp\` with \`AGMX_API_KEY\` set.
+If your MCP client can't send headers to remote servers, run the local bridge: \`npx -y @agmx.io/cli mcp\` with \`AGMX_API_KEY\` set.
 
 \`\`\`json
 {
@@ -244,11 +244,11 @@ Every error is JSON with a stable \`_tag\` and a human \`message\`:
 
 ## 7. SDKs and CLI
 
-- TypeScript: \`npm install agmx\` → \`new Agmx({ apiKey })\`, \`agmx.waitForCode({ inboxId })\`, \`Agmx.signup({ name, ownerEmail })\`.
+- TypeScript: \`npm install @agmx.io/sdk\` → \`new Agmx({ apiKey })\`, \`agmx.waitForCode({ inboxId })\`, \`Agmx.signup({ name, ownerEmail })\`.
 - Python: \`pip install agmx\` → \`Agmx(api_key).wait_for_code(inbox_id=…)\`.
-- CLI: \`npx agmx-cli wait --from github.com --code\`.
+- CLI: \`npx @agmx.io/cli wait --from github.com --code\`.
 
-(Until they're published, install from source: https://github.com/nearbycoder/agmx.io/tree/main/packages)
+(The Python package is not on PyPI yet — install from source: https://github.com/nearbycoder/agmx.io/tree/main/packages/python)
 `
 
 export const llmsTxt = (origin: string) => `# AGMX

@@ -1,9 +1,9 @@
-# agmx-cli
+# @agmx.io/cli
 
 Command-line client and local MCP bridge for [AGMX](https://agmx.io) — email inboxes for AI agents.
 
 ```sh
-npm install -g agmx-cli      # or: npx agmx-cli <command>
+npm install -g @agmx.io/cli      # or: npx @agmx.io/cli <command>
 ```
 
 ```sh
@@ -23,7 +23,7 @@ Add `--json` to any command for machine-readable output.
 `agmx mcp` runs a local MCP server over stdio and forwards it to the AGMX MCP endpoint with your saved key — handy for clients that can't attach headers to remote servers.
 
 ```json
-{ "mcpServers": { "agmx": { "command": "npx", "args": ["-y", "agmx-cli", "mcp"], "env": { "AGMX_API_KEY": "agmx_agt_…" } } } }
+{ "mcpServers": { "agmx": { "command": "npx", "args": ["-y", "@agmx.io/cli", "mcp"], "env": { "AGMX_API_KEY": "agmx_agt_…" } } } }
 ```
 
 ## Configuration
@@ -34,7 +34,7 @@ The key is stored in `~/.config/agmx/config.json` (mode 600). `AGMX_API_KEY` and
 
 ```sh
 cd packages/sdk && npm install && npm run build && npm link
-cd ../cli && npm link agmx && npm link     # puts `agmx` on your PATH
+cd ../cli && npm link @agmx.io/sdk && npm link     # puts `agmx` on your PATH
 ```
 
 MIT licensed.

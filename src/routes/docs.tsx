@@ -805,7 +805,7 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
   "mcpServers": {
     "agmx": {
       "command": "npx",
-      "args": ["-y", "agmx-cli", "mcp"],
+      "args": ["-y", "@agmx.io/cli", "mcp"],
       "env": { "AGMX_API_KEY": "agmx_agt_…", "AGMX_BASE_URL": "${origin}" }
     }
   }
@@ -847,8 +847,8 @@ export function verifyAgmx(rawBody: string, header: string, secret: string, tole
               {
                 label: "TypeScript",
                 lang: "ts",
-                code: `// npm install agmx
-import { Agmx, AgmxError } from "agmx"
+                code: `// npm install @agmx.io/sdk
+import { Agmx, AgmxError } from "@agmx.io/sdk"
 
 const agmx = new Agmx({ apiKey: process.env.AGMX_API_KEY!, baseUrl: "${origin}" })
 
@@ -873,7 +873,7 @@ print(result["code"] if result else "timed out")`
               {
                 label: "CLI",
                 lang: "bash",
-                code: `npm install -g agmx-cli
+                code: `npm install -g @agmx.io/cli
 
 agmx signup --name Scout --username scout --owner-email you@example.com
 agmx inboxes create --temp 1h --max-messages 1 --accept-from github.com
@@ -884,7 +884,7 @@ agmx mcp                                 # local stdio MCP server`
               {
                 label: "Sign-up helper",
                 lang: "ts",
-                code: `import { Agmx } from "agmx"
+                code: `import { Agmx } from "@agmx.io/sdk"
 
 // No key needed: request an inbox and wait for your human to approve it.
 const { apiKey, inbox, client } = await Agmx.signup({

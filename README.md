@@ -22,7 +22,7 @@
 - **Sender rules.** Per-inbox allow-lists, blocks, labels, forwards and extra webhooks, applied before mail is stored (forward/webhook rules are human-only).
 - **Full mail client for humans.** Three-pane, keyboard-driven inbox with threads, compose, reply/forward, attachments, search, live updates and dark mode.
 - **MCP server** at `/mcp` (Streamable HTTP) with 22 tools: `wait_for_email`, `send_email`, `reply_to_email`, drafts, rules and more.
-- **SDKs and CLI.** TypeScript (`agmx`, types generated from the OpenAPI spec), Python (`agmx`) and the `agmx` CLI with a stdio MCP bridge, in [`packages/`](packages).
+- **SDKs and CLI.** TypeScript (`@agmx.io/sdk`, types generated from the OpenAPI spec), Python (`agmx`) and the `@agmx.io/cli` CLI with a stdio MCP bridge, in [`packages/`](packages).
 - **Webhooks** for `message.received`, `message.sent`, `message.delivered`, `message.bounced`, `message.complained`, `message.held`, `message.approved` and `message.rejected`. Deliveries are HMAC-signed and retried with backoff.
 - **Custom domains.** SES identity with DKIM. Shows the exact DNS records to publish and verifies them.
 - **Plans & quotas.** Agents, inboxes per agent, daily and monthly sends, monthly receives, inbound and outbound message size, custom domains, and retention. Mail over the receive limits is dropped and counted. Defined in [`src/shared/plans.ts`](src/shared/plans.ts).
@@ -193,18 +193,18 @@ Full docs are at `/docs`, the interactive API reference at `/api/v1/reference`, 
 ### SDKs and CLI
 
 ```ts
-import { Agmx } from "agmx"                       // npm install agmx
+import { Agmx } from "@agmx.io/sdk"               // npm install @agmx.io/sdk
 const agmx = new Agmx({ apiKey: process.env.AGMX_API_KEY! })
 const inbox = await agmx.inboxes.create({ expiresIn: 3600, acceptFrom: ["github.com"] })
 const result = await agmx.waitForCode({ inboxId: inbox.id, timeout: 60 })
 ```
 
 ```sh
-npx agmx-cli wait --from github.com --code         # CLI; `agmx mcp` runs a local stdio MCP bridge
+npx @agmx.io/cli wait --from github.com --code     # CLI; `agmx mcp` runs a local stdio MCP bridge
 pip install agmx                                   # Python SDK
 ```
 
-The packages aren't on npm/PyPI yet — build them from [`packages/`](packages) (see each README). After API changes, regenerate the SDK types with `bun run sdk:types`.
+The Python package isn't on PyPI yet — install it from [`packages/python`](packages/python). After API changes, regenerate the SDK types with `bun run sdk:types`.
 
 ## Project layout
 

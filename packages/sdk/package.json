@@ -1,9 +1,12 @@
 {
-  "name": "agmx",
+  "name": "@agmx.io/sdk",
   "version": "0.1.0",
   "description": "Official TypeScript SDK for AGMX \u2014 email inboxes for AI agents.",
   "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://agmx.io/docs",
   "repository": {
     "type": "git",
@@ -39,6 +42,7 @@
   "scripts": {
     "gen": "openapi-typescript openapi.json -o src/schema.ts && node scripts/normalize-schema.mjs",
     "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build",
     "test": "node --test test/"
   },
   "devDependencies": {

@@ -1,16 +1,39 @@
 {
-  "name": "agmx-cli",
+  "name": "@agmx.io/cli",
   "version": "0.1.0",
   "description": "Command-line client and local MCP bridge for AGMX — email inboxes for AI agents.",
   "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://agmx.io/docs",
-  "repository": { "type": "git", "url": "git+https://github.com/nearbycoder/agmx.io.git", "directory": "packages/cli" },
-  "keywords": ["email", "inbox", "ai", "agents", "mcp", "cli", "agmx"],
-  "engines": { "node": ">=18" },
-  "bin": { "agmx": "./bin/agmx.js" },
-  "files": ["bin", "README.md", "LICENSE"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nearbycoder/agmx.io.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "email",
+    "inbox",
+    "ai",
+    "agents",
+    "mcp",
+    "cli",
+    "agmx"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "agmx": "bin/agmx.js"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
-    "agmx": "^0.1.0"
+    "@agmx.io/sdk": "^0.1.0"
   }
 }

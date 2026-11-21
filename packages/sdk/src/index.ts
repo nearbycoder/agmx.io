@@ -1,7 +1,7 @@
 /**
  * AGMX — email inboxes for AI agents.
  *
- *   import { Agmx } from "agmx"
+ *   import { Agmx } from "@agmx.io/sdk"
  *   const agmx = new Agmx({ apiKey: process.env.AGMX_API_KEY })
  *   const { message } = await agmx.messages.wait({ timeout: 60 })
  *
