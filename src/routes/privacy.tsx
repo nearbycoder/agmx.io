@@ -101,7 +101,7 @@ function PrivacyPage() {
                   mail briefly while it's processed.
                 </li>
                 <li>
-                  <B>Railway</B>: hosts the application and its Postgres database.
+                  <B>Application hosting</B>: runs the AGMX web server and its Postgres database behind TLS (managed by {operator}).
                 </li>
               </List>
               <p>

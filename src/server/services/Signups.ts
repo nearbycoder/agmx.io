@@ -69,6 +69,16 @@ export class Signups extends Context.Service<Signups, {
             ? Effect.fail(new Conflict({ message: "This request has expired. Ask the agent to start again." }))
             : Effect.void
 
+      // If the agent addressed the request to a specific ownerEmail, only that account may view or decide it.
+      const requireOwner = (principal: Principal, row: SignupRow) =>
+        row.ownerEmail && row.ownerEmail !== principal.email.toLowerCase()
+          ? Effect.fail(
+              new Forbidden({
+                message: "This sign-up request was addressed to a different account. Sign in with the email the agent used, or ask it to start a new request."
+              })
+            )
+          : Effect.void
+
       const base = {
         mcpUrl: `${env.appUrl}/mcp`,
         apiBaseUrl: `${env.appUrl}/api/v1`
@@ -171,12 +181,15 @@ export class Signups extends Context.Service<Signups, {
 
         get: Effect.fn("Signups.get")(function* (principal, code) {
           yield* requireAccount(principal, "review agent sign-ups")
-          return toPending(yield* byCode(code))
+          const row = yield* byCode(code)
+          yield* requireOwner(principal, row)
+          return toPending(row)
         }),
 
         approve: Effect.fn("Signups.approve")(function* (principal, code, input) {
           yield* requireAccount(principal, "approve agent sign-ups")
           const row = yield* byCode(code)
+          yield* requireOwner(principal, row)
           yield* requirePending(row)
           const result = yield* db.transaction(
             Effect.gen(function* () {
@@ -208,6 +221,7 @@ export class Signups extends Context.Service<Signups, {
         deny: Effect.fn("Signups.deny")(function* (principal, code) {
           yield* requireAccount(principal, "deny agent sign-ups")
           const row = yield* byCode(code)
+          yield* requireOwner(principal, row)
           yield* db.use((d) =>
             d
               .update(agentSignups)

@@ -204,6 +204,32 @@ describe("agent self sign-up", () => {
     const me = await call("GET", "/me", undefined, first.body.apiKey)
     expect(me.body.auth).toMatchObject({ kind: "agent_key", agentId: approved.body.id })
   })
+
+  it("blocks another account from viewing or deciding a signup addressed to ownerEmail", async () => {
+    const pg = postgres(url, { max: 1 })
+    await pg`insert into "user" (id, name, email, plan) values ('usr_other', 'Other', 'other@example.com', 'pro') on conflict (id) do nothing`
+    await pg.end()
+    const [{ runtime }, { Agents }] = await Promise.all([import("~/server/runtime"), import("~/server/services/Agents")])
+    const otherKey = (await runtime.runPromise(Effect.flatMap(Effect.service(Agents), (a) => a.mintKey("usr_other", null, "other")))).key
+
+    const addressed = await call("POST", "/signup", { name: "PrivateBot", ownerEmail: "owner@example.com" }, "")
+    expect(addressed.status).toBe(200)
+    const code = addressed.body.userCode as string
+
+    expect((await call("GET", `/signup-requests/${code}`, undefined, otherKey)).status).toBe(403)
+    expect((await call("POST", `/signup-requests/${code}/approve`, {}, otherKey)).status).toBe(403)
+    expect((await call("POST", `/signup-requests/${code}/deny`, undefined, otherKey)).status).toBe(403)
+
+    // The intended owner can still inspect and deny it.
+    expect((await call("GET", `/signup-requests/${code}`, undefined, ownerKey)).status).toBe(200)
+    expect((await call("POST", `/signup-requests/${code}/deny`, undefined, ownerKey)).status).toBe(200)
+
+    // Without ownerEmail, any human with the code can still review/deny it.
+    const open = await call("POST", "/signup", { name: "OpenBot" }, "")
+    expect(open.status).toBe(200)
+    expect((await call("GET", `/signup-requests/${open.body.userCode}`, undefined, otherKey)).status).toBe(200)
+    expect((await call("POST", `/signup-requests/${open.body.userCode}/deny`, undefined, otherKey)).status).toBe(200)
+  })
 })
 
 describe("webhooks", () => {

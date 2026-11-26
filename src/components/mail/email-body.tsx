@@ -13,6 +13,27 @@ const frameStyle = (padding: string) => `
   blockquote{margin:0 0 0 .8ex;border-left:2px solid #ddd;padding-left:1ex;color:#555}
 `
 
+const FRAME_CSP =
+  "default-src 'none'; img-src 'self' https: http: data:; style-src 'unsafe-inline'; font-src https: data:; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
+
+/**
+ * Build the sandboxed `srcDoc` for untrusted email HTML.
+ * Strips `<meta>` (blocks `http-equiv="refresh"` redirects), `<base>` (blocks relative-URL hijacking),
+ * and active/embedded tags before wrapping with a strict CSP and `no-referrer` policy.
+ */
+export function buildEmailSrcDoc(html: string, attachments: MessageT["attachments"], dark: boolean): string {
+  let body = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<(?:meta|base|iframe|object|embed|applet)\b[^>]*>/gi, "")
+    .replace(/<\/(?:iframe|object|embed|applet)>/gi, "")
+  // Resolve inline `cid:` images to their attachment URLs.
+  for (const a of attachments) {
+    if (!a.contentId) continue
+    body = body.split(`cid:${a.contentId}`).join(`${a.downloadUrl}?inline=1`)
+  }
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}"><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light"><base target="_blank"><style>${frameStyle(dark ? "20px" : "0")}</style></head><body>${body}</body></html>`
+}
+
 /**
  * Renders untrusted email HTML inside a sandboxed iframe. Scripts, forms and
  * top navigation are blocked (no `allow-scripts`); `allow-same-origin` is only
@@ -25,15 +46,7 @@ export function HtmlFrame({ html, attachments }: { html: string; attachments: Me
   const { resolved } = useTheme()
   const dark = resolved === "dark"
 
-  const srcDoc = useMemo(() => {
-    let body = html
-    // Resolve inline `cid:` images to their attachment URLs.
-    for (const a of attachments) {
-      if (!a.contentId) continue
-      body = body.split(`cid:${a.contentId}`).join(`${a.downloadUrl}?inline=1`)
-    }
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><base target="_blank"><style>${frameStyle(dark ? "20px" : "0")}</style></head><body>${body}</body></html>`
-  }, [html, attachments, dark])
+  const srcDoc = useMemo(() => buildEmailSrcDoc(html, attachments, dark), [html, attachments, dark])
 
   useEffect(() => {
     const frame = ref.current

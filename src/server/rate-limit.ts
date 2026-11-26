@@ -80,19 +80,39 @@ export const resetRateLimits = () => buckets.clear()
 export const rateLimitingEnabled = () => (process.env.RATE_LIMIT ?? "").toLowerCase() !== "off"
 
 /**
- * The client's IP. Railway's edge sets X-Real-IP; for X-Forwarded-For the right-most entry is the one
- * our proxy appended (left-most entries are client-controlled and spoofable).
+ * Internal header populated by `/api/auth/$` with the verified client IP before calling Better Auth.
+ * Any incoming value from the network is stripped first so callers cannot spoof it.
  */
-export const clientIp = (request: Request): string => {
-  const real = request.headers.get("x-real-ip")?.trim()
-  if (real) return real
-  const forwarded = request.headers.get("x-forwarded-for")
-  if (forwarded) {
-    const hops = forwarded.split(",").map((h) => h.trim()).filter(Boolean)
-    if (hops.length) return hops[hops.length - 1]!
+export const TRUSTED_INTERNAL_IP_HEADER = "x-agmx-client-ip"
+
+const lastHop = (value: string | null | undefined): string | null => {
+  if (!value) return null
+  const hops = value.split(",").map((h) => h.trim()).filter(Boolean)
+  return hops.length ? hops[hops.length - 1]! : null
+}
+
+/**
+ * Resolve the client's IP from request headers.
+ *
+ * When `TRUSTED_IP_HEADER` is configured (e.g. `cf-connecting-ip` behind Cloudflare or `x-real-ip`
+ * behind nginx), that header is read first. Otherwise we read the right-most `X-Forwarded-For` hop
+ * (appended by reverse proxies like Caddy/Coolify, Traefik and nginx; left-most hops are client-
+ * controlled and spoofable), falling back to `X-Real-IP` only when `X-Forwarded-For` is absent.
+ */
+export const clientIpFromHeaders = (get: (name: string) => string | null | undefined): string => {
+  const configured = process.env.TRUSTED_IP_HEADER?.trim().toLowerCase()
+  if (configured) {
+    const trusted = lastHop(get(configured))
+    if (trusted) return trusted
   }
+  const forwarded = lastHop(get("x-forwarded-for"))
+  if (forwarded) return forwarded
+  const real = get("x-real-ip")?.trim()
+  if (real) return real
   return "unknown"
 }
+
+export const clientIp = (request: Request): string => clientIpFromHeaders((name) => request.headers.get(name))
 
 const digest = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 24)
 
@@ -154,5 +174,5 @@ export const recordBadAuth = (request: Request, headers: Record<string, string> 
   return r.ok ? null : tooManyRequests(r, "Too many failed authentication attempts.", headers)
 }
 
-/** Header names Better Auth should read the client IP from (kept in sync with `clientIp`). */
-export const IP_HEADERS = ["x-real-ip", "x-forwarded-for"]
+/** Header name Better Auth reads the client IP from (populated in `/api/auth/$` from `clientIp`). */
+export const IP_HEADERS = [TRUSTED_INTERNAL_IP_HEADER]

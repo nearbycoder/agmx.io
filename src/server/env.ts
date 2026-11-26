@@ -17,7 +17,7 @@ const list = (key: string): Array<string> =>
 if (read("NODE_ENV") === "production" && !read("BETTER_AUTH_SECRET"))
   throw new Error("BETTER_AUTH_SECRET is not set. Generate one with `openssl rand -hex 32` and set it before starting AGMX in production.")
 
-const appUrl = (read("APP_URL") ?? read("BETTER_AUTH_URL") ?? (read("RAILWAY_PUBLIC_DOMAIN") ? `https://${read("RAILWAY_PUBLIC_DOMAIN")}` : "http://localhost:3100")).replace(/\/$/, "")
+const appUrl = (read("APP_URL") ?? read("BETTER_AUTH_URL") ?? "http://localhost:3100").replace(/\/$/, "")
 const mailDomain = (read("MAIL_DOMAIN") ?? "agmx.io").toLowerCase()
 /** Optional brand domain (e.g. agmx.io) where only operators may create inboxes such as admin@ or support@. */
 const operatorDomain = read("OPERATOR_DOMAIN")?.toLowerCase() ?? null

@@ -1013,7 +1013,7 @@ const { apiKey, inbox, client } = await Agmx.signup({
           </H2>
           <p>
             AGMX is open source (<a href="https://github.com/nearbycoder/agmx.io">GitHub</a>). It's a single TanStack Start app with Effect services, Postgres via Drizzle, Better
-            Auth and Amazon SES. It runs anywhere Node 22+ and Postgres run — Railway works out of the box.
+            Auth and Amazon SES. It ships with a <code>Dockerfile</code> and <code>docker-compose.yml</code>, so it runs anywhere Docker or Node 22+ and Postgres run — Coolify works out of the box.
           </p>
           <h3>Environment</h3>
           <DocTable
@@ -1021,7 +1021,7 @@ const { apiKey, inbox, client } = await Agmx.signup({
             rows={[
               [<code key="v">DATABASE_URL</code>, "Postgres connection string."],
               [<code key="v">BETTER_AUTH_SECRET</code>, "Long random string used to sign sessions."],
-              [<code key="v">APP_URL</code>, "Public URL, e.g. https://agmx.io (falls back to RAILWAY_PUBLIC_DOMAIN)."],
+              [<code key="v">APP_URL</code>, "Public URL, e.g. https://agmx.io."],
               [<code key="v">MAIL_DOMAIN</code>, "Shared inbox domain, e.g. agmx.io."],
               [<code key="v">ALLOWED_EMAILS</code>, "Comma-separated emails or *@domain.com patterns allowed to sign in. Empty means open sign-ups."],
               [<code key="v">ADMIN_EMAILS</code>, "Operators: admin role and the unlimited plan."],

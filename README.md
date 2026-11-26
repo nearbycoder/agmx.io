@@ -119,26 +119,44 @@ ENABLE_DEV_INBOUND=false
 
 Ports are bound to `127.0.0.1`. To serve it publicly, put a TLS reverse proxy (Caddy, nginx, Traefik) in front of port 3000. Attachment downloads use signed URLs to the storage server, so either expose port 9000 at a public URL (and set `STORAGE_PUBLIC_ENDPOINT` to it) or point `STORAGE_*` at AWS S3 or Cloudflare R2.
 
-## Deploying
+## Deploying to production
 
-### 1. Railway
+AGMX ships as a single stateless Node container ([`Dockerfile`](Dockerfile)) plus Postgres, optional S3-compatible attachment storage, and Amazon SES. Migrations run automatically on boot (`node --experimental-strip-types scripts/migrate.ts`), and the container listens on `PORT` (default `3000`) with a health check at `GET /api/v1/health`.
 
-1. Create a project from this repository. The service builds from the `Dockerfile`.
-2. Add a **Postgres** service and set `DATABASE_URL=${{Postgres.DATABASE_URL}}` on the app.
-3. Set the variables from [`.env.example`](.env.example): at minimum `BETTER_AUTH_SECRET`, `APP_URL`, `MAIL_DOMAIN`, `ALLOWED_EMAILS`, `ADMIN_EMAILS` and the AWS keys.
-4. Add your custom domain (e.g. `agmx.io`) in Railway's networking settings.
+### 1. Coolify (recommended)
 
-Migrations run automatically on boot. Health check: `GET /api/v1/health`.
+1. **Create Postgres.** In your Coolify project, add a **PostgreSQL 17** database resource, start it, and copy its **Postgres URL (internal)**.
+2. **Create the app.** Add a **Public Repository** (or GitHub App) resource pointing at `https://github.com/nearbycoder/agmx.io` (or your fork) on branch `main`, and choose the **Dockerfile** build pack.
+3. **Configure networking & health check.**
+   - Set **Domains** to your public URL, e.g. `https://mail.your-domain` (Coolify's Caddy/Traefik proxy provisions TLS automatically and routes to container port `3000`).
+   - Confirm **Ports Exposes** is `3000`.
+   - Enable the health check on `GET /api/v1/health` (port `3000`).
+4. **Set environment variables.** Add these in Coolify → *Environment Variables* (see [`.env.example`](.env.example) for the full list):
 
-Service settings (Dockerfile builder, health check, restart policy, replicas, domain) are defined as [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code) in [`.railway/railway.ts`](.railway/railway.ts). Railway doesn't read that file during deploys; apply changes with the CLI:
+   ```sh
+   DATABASE_URL=postgres://…                   # internal URL from step 1
+   APP_URL=https://mail.your-domain            # no trailing slash
+   BETTER_AUTH_SECRET=…                        # openssl rand -base64 48
+   MAIL_DOMAIN=bot.your-domain                 # domain agent inboxes live on
+   OPERATOR_DOMAIN=your-domain                 # optional: operator-only domain + role mailboxes
+   OPERATOR_NAME="Your Name or Company"        # shown in /terms and /privacy
+   ADMIN_EMAILS=you@your-domain
+   ALLOWED_EMAILS=you@your-domain              # or * for open sign-ups
+   SYSTEM_FROM="AGMX <no-reply@your-domain>"   # on a verified SES identity
+   MAIL_TRANSPORT=ses
+   AWS_REGION=us-east-1
+   AWS_ACCESS_KEY_ID=…
+   AWS_SECRET_ACCESS_KEY=…
+   SES_INBOUND_TOPIC_ARNS=arn:aws:sns:…        # required in production; set before subscribing SNS
+   SES_CONFIGURATION_SET=agmx                  # optional: delivery/bounce/complaint tracking
+   ATTACHMENT_STORAGE=s3                       # optional: or "db" to keep attachments in Postgres
+   STORAGE_BUCKET=your-attachments-bucket
+   ```
 
-```sh
-railway link                 # pick your project + environment
-railway config plan          # preview; changes nothing
-railway config apply         # apply after reviewing the plan
-```
+   If your deployment sits behind Cloudflare or another CDN in front of Coolify, set `TRUSTED_IP_HEADER=cf-connecting-ip` (otherwise AGMX reads the right-most `X-Forwarded-For` hop set by Coolify's proxy).
+5. **Deploy & auto-deploy.** Click **Deploy**. To deploy automatically on push to `main`, connect a GitHub App in Coolify or configure Coolify's signed **Manual Git Webhook** in your repository's GitHub settings.
 
-For your own deployment, edit the repo, service name and domain in that file first. Variables are `preserve()`, so their values stay in Railway and out of git.
+> **Other hosts.** The same [`Dockerfile`](Dockerfile) and environment variables work on any Docker/container host (Fly.io, Render, ECS, Kubernetes, or a VPS running `docker compose` behind Caddy/nginx/Traefik).
 
 ### 2. Amazon SES
 
@@ -154,6 +172,15 @@ Pick a region that supports **email receiving** (e.g. `us-east-1`, `us-west-2`, 
 8. **Leave the sandbox.** Request production access in *SES → Account dashboard*. Until then SES only delivers to verified addresses.
 
 The *Operator* page in the dashboard (`/app/admin`) shows live SES account status, the inbound webhook URL and a setup checklist.
+
+### 3. Launch checklist
+
+Before opening a production instance to users or agents:
+
+1. **Secrets & access:** set a unique `BETTER_AUTH_SECRET`, keep `ENABLE_DEV_INBOUND=false`, and decide whether `ALLOWED_EMAILS` is invite-only or `*`.
+2. **SES production & DNS:** confirm DKIM is `Verified`, `MX 10 inbound-smtp.<region>.amazonaws.com` is live, `SES_INBOUND_TOPIC_ARNS` is set and the SNS HTTPS subscription shows *Confirmed*, and SES has left the sandbox.
+3. **Verify in the dashboard:** sign in as an `ADMIN_EMAILS` user, open **Operator** (`/app/admin`), and confirm SES account status, production access, and inbound topic count are green.
+4. **End-to-end smoke test:** create a test agent, send an email to an external address and reply back to confirm outbound DKIM + inbound SNS delivery + attachment downloads.
 
 ## Using it from an agent
 
@@ -226,10 +253,11 @@ tests/             Vitest unit + end-to-end API tests
 packages/          TypeScript SDK, CLI + MCP bridge, Python SDK
 ```
 
+## Contributing & Security
+
+- Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, tests, and SDK type regeneration.
+- To report a security vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT
-
-## Production deployment
-
-GitHub verifies changes in CI. A signed push webhook deploys `main` to Coolify.

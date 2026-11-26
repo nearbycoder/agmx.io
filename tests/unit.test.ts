@@ -6,6 +6,7 @@ import { verifySnsSignature } from "~/server/mail/sns"
 import { buttonEmail } from "~/server/system-mail"
 import { contentDisposition } from "~/server/services/Storage"
 import { signPayload } from "~/server/services/Webhooks"
+import { buildEmailSrcDoc } from "~/components/mail/email-body"
 import { getPlan } from "~/shared/plans"
 import { createHmac } from "node:crypto"
 
@@ -112,5 +113,19 @@ describe("encoding & system mail safety", () => {
     expect(await verifySnsSignature({ ...base, SigningCertURL: "http://sns.us-east-1.amazonaws.com/cert.pem" })).toBe(false)
     expect(await verifySnsSignature({ ...base, SigningCertURL: "https://sns.us-east-1.amazonaws.com:8443/cert.pem" })).toBe(false)
     expect(await verifySnsSignature({ ...base, SigningCertURL: "https://evil.example/cert.pem" })).toBe(false)
+  })
+
+  it("hardens email iframe srcDoc against meta refresh, base hijacking and scripts", () => {
+    const doc = buildEmailSrcDoc(
+      `<meta http-equiv="refresh" content="0;url=https://evil.example"><base href="https://evil.example/"><script>alert(1)</script><iframe src="https://evil.example"></iframe><p>Hi</p><img src="cid:logo1">`,
+      [{ id: "att_1", filename: "logo.png", contentType: "image/png", size: 12, contentId: "logo1", inline: true, extractedText: null, downloadUrl: "/api/v1/messages/msg_1/attachments/att_1" }],
+      false
+    )
+    expect(doc).toContain('http-equiv="Content-Security-Policy"')
+    expect(doc).toContain('name="referrer" content="no-referrer"')
+    expect(doc).not.toContain("evil.example")
+    expect(doc).not.toContain("<script")
+    expect(doc).not.toContain("<iframe")
+    expect(doc).toContain('<img src="/api/v1/messages/msg_1/attachments/att_1?inline=1">')
   })
 })

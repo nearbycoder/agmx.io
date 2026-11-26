@@ -14,6 +14,7 @@ import { Reputation, REPUTATION } from "../services/Reputation"
 import { Db } from "../services/Db"
 import { requireAccount } from "../services/access"
 import { agents as agentsTable } from "../db/schema"
+import { clientIpFromHeaders } from "../rate-limit"
 import { eq } from "drizzle-orm"
 
 const ok = { ok: true } as const
@@ -280,12 +281,11 @@ const SignupHandlers = HttpApiBuilder.group(
       .handle("start", ({ payload }) =>
         Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest
-          // Same trust order as the rate limiter: the proxy's X-Real-IP, then the last X-Forwarded-For hop.
-          // The first hop is whatever the caller typed, so it's never used.
-          const forwarded =
-            request.headers["x-real-ip"]?.trim() ||
-            request.headers["x-forwarded-for"]?.split(",").map((hop) => hop.trim()).filter(Boolean).at(-1)
-          const ip = forwarded || (request.remoteAddress._tag === "Some" ? request.remoteAddress.value : null)
+          const resolved = clientIpFromHeaders((name) => {
+            const v = request.headers[name]
+            return Array.isArray(v) ? v.join(", ") : v
+          })
+          const ip = resolved !== "unknown" ? resolved : request.remoteAddress._tag === "Some" ? request.remoteAddress.value : null
           return yield* signups.start(payload, { ip, userAgent: request.headers["user-agent"] ?? null })
         })
       )

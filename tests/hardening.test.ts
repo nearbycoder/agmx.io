@@ -205,11 +205,21 @@ describe("rate limiting", () => {
   const req = (headers: Record<string, string>) => new Request("http://agmx.test/api/v1/me", { headers })
 
   it("identifies callers by key, session or the proxy-appended IP", () => {
-    expect(clientIp(req({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "9.9.9.9, 5.6.7.8" }))).toBe("1.2.3.4")
+    // Proxy-appended right-most X-Forwarded-For hop wins over a client-spoofed X-Real-IP.
+    expect(clientIp(req({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "9.9.9.9, 5.6.7.8" }))).toBe("5.6.7.8")
     expect(clientIp(req({ "x-forwarded-for": "9.9.9.9, 5.6.7.8" }))).toBe("5.6.7.8")
+    // Falls back to X-Real-IP when X-Forwarded-For is absent.
+    expect(clientIp(req({ "x-real-ip": "1.2.3.4" }))).toBe("1.2.3.4")
+    // Explicit TRUSTED_IP_HEADER (e.g. Cloudflare) takes precedence when configured.
+    process.env.TRUSTED_IP_HEADER = "cf-connecting-ip"
+    try {
+      expect(clientIp(req({ "cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "9.9.9.9, 5.6.7.8" }))).toBe("203.0.113.9")
+    } finally {
+      delete process.env.TRUSTED_IP_HEADER
+    }
     expect(callerKey(req({ authorization: "Bearer agmx_x" })).authenticated).toBe(true)
     expect(callerKey(req({ cookie: "agmx.session_token=abc" })).authenticated).toBe(true)
-    expect(callerKey(req({ "x-real-ip": "1.2.3.4" })).key).toBe("ip:1.2.3.4")
+    expect(callerKey(req({ "x-forwarded-for": "1.2.3.4" })).key).toBe("ip:1.2.3.4")
   })
 
   it("counts hits in a fixed window", () => {
