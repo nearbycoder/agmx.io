@@ -229,3 +229,7 @@ packages/          TypeScript SDK, CLI + MCP bridge, Python SDK
 ## License
 
 MIT
+
+## Production deployment
+
+GitHub verifies changes in CI. A signed push webhook deploys `main` to Coolify.
